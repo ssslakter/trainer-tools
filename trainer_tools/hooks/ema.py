@@ -1,0 +1,40 @@
+import logging
+from ..imports import *
+from ..trainer import BaseTrainer
+from .base import BaseHook
+from copy import deepcopy
+
+log = logging.getLogger(__name__)
+
+
+class EMAHook(BaseHook):
+    """Keeps Exponential moving average of a model"""
+
+    def __init__(self, decay: float = 0.9999):
+        self.decay = decay
+        self.ema_model = None
+
+    def before_fit(self, trainer: BaseTrainer):
+        self.ema_model = deepcopy(trainer.model)
+        self.ema_model.eval()
+        for p in self.ema_model.parameters():
+            p.requires_grad_(False)
+
+        if hasattr(trainer, "_ema_state_buffer"):
+            log.info("Loading EMA state from checkpoint buffer...")
+            self.ema_model.load_state_dict(trainer._ema_state_buffer)
+            del trainer._ema_state_buffer
+
+    def after_step(self, trainer: BaseTrainer):
+        with t.no_grad():
+            for p_ema, p_model in zip(self.ema_model.parameters(), trainer.model.parameters()):
+                p_ema.data.mul_(self.decay).add_(p_model.data, alpha=1 - self.decay)
+
+    def before_valid(self, trainer: BaseTrainer):
+        self.temp_model = trainer.model
+        trainer.model = self.ema_model
+
+    def after_epoch(self, trainer: BaseTrainer):
+        if hasattr(self, "temp_model"):
+            trainer.model = self.temp_model
+            del self.temp_model
