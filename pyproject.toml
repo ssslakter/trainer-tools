@@ -3,19 +3,19 @@ authors = [
     { name = "Slava Chaunin", email = "67190162+Ssslakter@users.noreply.github.com" },
 ]
 dependencies = [
-    "torch>=2.8,<2.9",
+    "torch>=2.9",
     "numpy",
-    "datasets>=4.4.1,<5",
+    "datasets",
     "matplotlib",
-    "transformers>=4.57.3,<5",
+    "transformers",
     "jupyter",
     "tqdm",
     "trackio",
     "torchvision",
-    "hydra-core>=1.3.2,<2",
+    "hydra-core",
 ]
 name = "trainer-tools"
-requires-python = ">= 3.11, <3.14"
+requires-python = ">= 3.11"
 version = "0.1.0"
 
 [build-system]
