@@ -2,7 +2,7 @@ import logging
 from .ema import EMAHook
 from ..imports import *
 from .base import BaseHook
-from ..trainer import BaseTrainer
+from ..trainer import Trainer
 import os
 from omegaconf import OmegaConf
 from ..checkpoint import save_pretrained
@@ -28,7 +28,17 @@ class CheckpointHook(BaseHook):
         self.saved_checkpoints: list[Path] = []
         self.config_saved = False
 
-    def _save(self, trainer: BaseTrainer, filename: str):
+    def _save_config(self, trainer: Trainer):
+        if self.config_saved:
+            return
+        if not (config := getattr(trainer, "config", None)):
+            return
+        config_path = self.save_dir / "config.yaml"
+        OmegaConf.save(config, config_path, resolve=True)
+        log.info(f"Saved config: {config_path}")
+        self.config_saved = True
+
+    def _save(self, trainer: Trainer, filename: str):
         path = self.save_dir / filename
         state = {
             "model": trainer.model.state_dict(),
@@ -55,14 +65,6 @@ class CheckpointHook(BaseHook):
         torch.save(state, path)
         log.info(f"Saved checkpoint: {path}")
 
-        # Save config
-        if not self.config_saved and (config := getattr(trainer, "config", None)):
-            config_path = self.save_dir / "config.yaml"
-            with open(config_path, "w") as f:
-                OmegaConf.save(config, f, resolve=True)
-            log.info(f"Saved config: {config_path}")
-            self.config_saved = True
-
         # Rotation logic
         if "interrupted" in filename:
             return
@@ -74,7 +76,9 @@ class CheckpointHook(BaseHook):
         if oldest.exists():
             oldest.unlink()
 
-    def before_fit(self, trainer: BaseTrainer):
+    def before_fit(self, trainer: Trainer):
+        self._save_config(trainer)
+
         if not self.resume_path:
             return
         if Path(self.resume_path).exists():
@@ -83,14 +87,14 @@ class CheckpointHook(BaseHook):
         else:
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
-    def after_step(self, trainer: BaseTrainer):
+    def after_step(self, trainer: Trainer):
         if trainer.training and trainer.step > 0 and trainer.step % self.every == 0:
             self._save(trainer, f"checkpoint_step_{trainer.step}.pt")
 
-    def after_cancel(self, trainer: BaseTrainer):
+    def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt")
 
-    def after_fit(self, trainer: BaseTrainer):
+    def after_fit(self, trainer: Trainer):
         self._save(trainer, "model_final.pt")
         model_to_save = trainer.model
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
@@ -99,7 +103,7 @@ class CheckpointHook(BaseHook):
 
         save_pretrained(model_to_save, self.save_dir, config=getattr(trainer, "config", None))
 
-    def load_checkpoint(self, trainer: BaseTrainer, path: str):
+    def load_checkpoint(self, trainer: Trainer, path: str):
         if not os.path.exists(path):
             raise FileNotFoundError(f"{path} not found")
         log.info(f"Loading checkpoint from {path}...")

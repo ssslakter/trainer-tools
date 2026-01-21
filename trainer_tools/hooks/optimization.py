@@ -1,5 +1,5 @@
 import logging
-from ..trainer import BaseTrainer
+from ..trainer import Trainer
 from ..imports import *
 from torch.amp import GradScaler, autocast
 from .base import BaseHook
@@ -102,5 +102,5 @@ class GradClipHook(BaseHook):
     def __init__(self, max_norm=1.0):
         self.max_norm = max_norm
 
-    def after_backward(self, trainer: BaseTrainer):
+    def after_backward(self, trainer: Trainer):
         nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)

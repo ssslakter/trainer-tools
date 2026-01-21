@@ -1,9 +1,9 @@
 import logging
 from collections import defaultdict
-
 from trainer_tools.utils import flatten_config
 from ..imports import *
 from .base import BaseHook
+from ..metrics import Metric, FunctionalMetric
 
 log = logging.getLogger(__name__)
 
@@ -12,108 +12,165 @@ try:
 
     _HAS_TIO = True
 except ImportError:
-    tio = None
-    _HAS_TIO = False
-
+    tio, _HAS_TIO = None, False
 try:
     import wandb
 
     _HAS_WANDB = True
 except ImportError:
-    wandb = None
-    _HAS_WANDB = False
+    wandb, _HAS_WANDB = None, False
 
 
-class BaseMetricsHook(BaseHook):
-    """An abstract hook to collect, aggregate, and plot training/validation metrics."""
+class LoggerHook(BaseHook):
+    """
+    Aggregates data from multiple Metrics and logs to console/tracker.
+    Only ONE instance of this hook is needed per Trainer.
+    """
 
-    def __init__(self, verbose=True, tracker_type: str = None, config=None, **tracker_kwargs):
-        self.verbose = verbose
-        self.metrics = defaultdict(list)
-        self.tracker = None
-        self.use_tracker = False
-        self.config = flatten_config(config) if config else None
-        self.tracker_kwargs = tracker_kwargs
-        
-        if tracker_type == "trackio":
-            if _HAS_TIO:
-                self.tracker = tio
-                self.use_tracker = True
-            else:
-                log.warning("'trackio' was requested but is not installed.")
-        elif tracker_type == "wandb":
-            if _HAS_WANDB:
-                self.tracker = wandb
-                self.use_tracker = True
-            else:
-                log.warning("'wandb' was requested but is not installed.")
-        elif tracker_type is not None:
-            raise ValueError(f"Unknown tracker_type: {tracker_type}. Choose from 'wandb', 'trackio', or None.")
+    def __init__(
+        self,
+        metrics: List[Union[Metric, Callable]],
+        verbose=True,
+        tracker_type: str = None,
+        config=None,
+        **tracker_kwargs,
+    ):
+        self.verbose, self.config, self.tracker_kwargs = verbose, config, tracker_kwargs
 
+        self.metrics = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
+        self._phases: dict[str, list[Metric]] = defaultdict(list)
+        for m in self.metrics:
+            self._phases[m.phase].append(m)
 
-    def _get_batch_metrics(self, trainer, prefix: str = Literal["train", "valid"]) -> dict:
-        """Subclasses MUST implement this to return a dictionary of metrics for the current step."""
-        raise NotImplementedError
+        # Buffers
+        self.step_data = {}
+        self.epoch_data = defaultdict(list)
+
+        # History now tracks values AND steps separately to handle freq > 1
+        self.history = defaultdict(list)  # {'train_loss': [0.5, 0.4...]}
+        self.history_steps = defaultdict(list)  # {'train_loss': [10, 20...]}
+
+        self.steps_per_epoch = 0
+        self._init_tracker(tracker_type)
+
+    def _init_tracker(self, t_type):
+        self.tracker, self.use_tracker = None, False
+        if t_type == "trackio" and _HAS_TIO:
+            self.tracker, self.use_tracker = tio, True
+        elif t_type == "wandb" and _HAS_WANDB:
+            self.tracker, self.use_tracker = wandb, True
+        elif t_type:
+            log.warning(f"Tracker '{t_type}' not found.")
+
+    def _run_metrics(self, trainer, phase):
+        prefix = "train" if trainer.training else "valid"
+
+        for m in self._phases[phase]:
+            if not m.should_run(trainer):
+                continue
+
+            data = m(trainer)
+            if not data:
+                continue
+            p_data = {f"{prefix}_{k}": v for k, v in data.items()}
+            self.step_data.update(p_data)
+
+            for k, v in p_data.items():
+                self.epoch_data[k].append(v)
+                if trainer.training:
+                    self.history[k].append(v)
+                    self.history_steps[k].append(trainer.step)
 
     def before_fit(self, trainer):
-        self.n_train, self.n_valid = len(trainer.train_dl), len(trainer.valid_dl)
+        self.steps_per_epoch = len(trainer.train_dl)
         if self.use_tracker:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
-    def before_valid(self, trainer):
-        self.val_batch_metrics = defaultdict(list)
+    def before_epoch(self, trainer):
+        self.epoch_data.clear()
+
+    def after_pred(self, trainer):
+        self._run_metrics(trainer, "after_pred")
 
     def after_loss(self, trainer):
-        prefix = "train" if trainer.training else "valid"
-        data = self._get_batch_metrics(trainer, prefix)
+        self._run_metrics(trainer, "after_loss")
 
-        metrics_dict = self.val_batch_metrics if not trainer.training else self.metrics
-        for k, v in data.items():
-            metrics_dict[k].append(v)
-        if self.use_tracker and trainer.training:
-            self.tracker.log(data, trainer.step)
+    def after_backward(self, trainer):
+        self._run_metrics(trainer, "after_backward")
+
+    def after_step(self, trainer):
+        self._run_metrics(trainer, "after_step")
+        if trainer.training and self.use_tracker and self.step_data:
+            self.tracker.log(self.step_data, trainer.step)
+        self.step_data.clear()
 
     def after_epoch(self, trainer):
-        for k, v in self.val_batch_metrics.items():
-            self.metrics[k].append(np.mean(v))
-        if self.use_tracker and (val_means := {k: self.metrics[k][-1] for k in self.val_batch_metrics}):
-            self.tracker.log(val_means, trainer.step)
-        train_loss = np.mean(self.metrics["train_loss"][-self.n_train :])
-        val_loss = self.metrics["valid_loss"][-1]
+        val_stats = {k: np.mean(v) for k, v in self.epoch_data.items() if k.startswith("valid_")}
+
+        for k, v in val_stats.items():
+            self.history[k].append(v)
+            self.history_steps[k].append((trainer.epoch + 1) * self.steps_per_epoch)
+
+        if self.use_tracker and val_stats:
+            self.tracker.log(val_stats, trainer.step)
+
         if self.verbose:
-            log.info(f"Epoch {trainer.epoch+1}/{trainer.epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+            logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
+            # Find latest train stats (handling different frequencies)
+            unique_metrics = set(k.split("_", 1)[1] for k in self.history if k.startswith("train_"))
+            for base_k in sorted(unique_metrics):
+                k = f"train_{base_k}"
+                if self.history[k]:
+                    # Simple average of last few collected points
+                    logs.append(f"T_{base_k}: {np.mean(self.history[k][-10:]):.3f}")
+
+            for k, v in val_stats.items():
+                logs.append(f"V_{k[6:]}: {v:.3f}")
+            log.info(" | ".join(logs))
 
     def after_fit(self, trainer):
         if self.use_tracker:
             self.tracker.finish()
 
-    def plot_loss(self, axes=None, from_step: int = 0):
-        """Plots graphs for all available metrics (e.g., loss, kl, recon)."""
-        train_keys = sorted([k for k in self.metrics if k.startswith("train_")])
-        metrics_to_plot = [k.replace("train_", "") for k in train_keys]
+    def plot(self, axes=None, metrics: List[str] = ["loss"]):
+        """
+        Plots collected metrics.
 
-        if not axes:
-            _, axes = plt.subplots(len(metrics_to_plot), 1, figsize=(8, 4 * len(metrics_to_plot)), squeeze=False)
-        axes = axes.flatten()
+        Args:
+            axes: Optional Matplotlib axes.
+            metrics: List of base metric names to plot (e.g. ["loss", "acc"]).
+                     Defaults to ["loss"]. If set to None, plots ALL collected metrics.
+        """
 
-        for i, m in enumerate(metrics_to_plot):
-            ax = axes[i]
-            data = self.metrics[f"train_{m}"]
-            ax.plot(list(range(from_step, len(data))), data[from_step:], label=f"Train {m.title()}")
-            if f"valid_{m}" in self.metrics:
-                epoch_from_step = from_step // self.n_train
-                data = self.metrics[f"valid_{m}"]
-                val_x = np.arange(1, len(data) + 1) * self.n_train - 1
-                ax.plot(val_x[epoch_from_step:], data[epoch_from_step:], "o-", label=f"Valid {m.title()}")
-            ax.set_title(m.replace("_", " ").title())
+        available = sorted(list(set(k.split("_", 1)[1] for k in self.history if k.startswith("train_"))))
+        keys = available if metrics is None else [k for k in metrics if k in available]
+
+        if not keys:
+            log.warning("No matching metrics found to plot.")
+            return
+
+        if axes is None:
+            fig, axes = plt.subplots(len(keys), 1, figsize=(7, 3 * len(keys)), sharex=True)
+            if len(keys) == 1:
+                axes = [axes]
+        elif not isinstance(axes, (list, np.ndarray)):
+            axes = [axes]
+
+        for ax, key in zip(axes, keys):
+            # Train: Use recorded steps for X-axis
+            if t_y := self.history.get(f"train_{key}"):
+                t_x = self.history_steps.get(f"train_{key}")
+                ax.plot(t_x, t_y, label=f"Train {key}")
+
+            # Valid: Use recorded steps (epoch boundaries)
+            if v_y := self.history.get(f"valid_{key}"):
+                v_x = self.history_steps.get(f"valid_{key}")
+                ax.plot(v_x, v_y, "o-", label=f"Valid {key}")
+
+            ax.set_ylabel(key.title())
             ax.legend()
-            ax.grid(True)
+            ax.grid(True, alpha=0.3)
 
-        axes[-1].set_xlabel("Batch / Step")
+        if axes:
+            axes[-1].set_xlabel("Steps")
         plt.tight_layout()
-        return axes
-
-
-class MetricsHook(BaseMetricsHook):
-    def _get_batch_metrics(self, trainer, prefix):
-        return {f"{prefix}_loss": trainer.loss}

@@ -7,7 +7,7 @@ T = TypeVar("T")
 RAISE = object()
 
 
-class BaseTrainer:
+class Trainer:
     """
     Helper class that contains training and evaluation loop.
 

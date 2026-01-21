@@ -12,7 +12,7 @@ dependencies = [
     "tqdm",
     "trackio",
     "torchvision",
-    "hydra-core",
+    "hydra-core", "wandb>=0.24.0,<0.25",
 ]
 name = "trainer-tools"
 requires-python = ">= 3.11"

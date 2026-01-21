@@ -1,6 +1,6 @@
 import logging
 from ..imports import *
-from ..trainer import BaseTrainer
+from ..trainer import Trainer
 from .base import BaseHook
 from copy import deepcopy
 
@@ -14,7 +14,7 @@ class EMAHook(BaseHook):
         self.decay = decay
         self.ema_model = None
 
-    def before_fit(self, trainer: BaseTrainer):
+    def before_fit(self, trainer: Trainer):
         self.ema_model = deepcopy(trainer.model)
         self.ema_model.eval()
         for p in self.ema_model.parameters():
@@ -25,16 +25,16 @@ class EMAHook(BaseHook):
             self.ema_model.load_state_dict(trainer._ema_state_buffer)
             del trainer._ema_state_buffer
 
-    def after_step(self, trainer: BaseTrainer):
+    def after_step(self, trainer: Trainer):
         with t.no_grad():
             for p_ema, p_model in zip(self.ema_model.parameters(), trainer.model.parameters()):
                 p_ema.data.mul_(self.decay).add_(p_model.data, alpha=1 - self.decay)
 
-    def before_valid(self, trainer: BaseTrainer):
+    def before_valid(self, trainer: Trainer):
         self.temp_model = trainer.model
         trainer.model = self.ema_model
 
-    def after_epoch(self, trainer: BaseTrainer):
+    def after_epoch(self, trainer: Trainer):
         if hasattr(self, "temp_model"):
             trainer.model = self.temp_model
             del self.temp_model
