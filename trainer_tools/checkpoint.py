@@ -5,6 +5,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
+
 def build_model_from_config(config: DictConfig) -> nn.Module:
     return instantiate(config)
 
@@ -20,7 +21,8 @@ def save_pretrained(model: nn.Module, save_dir: str, config: Optional[DictConfig
     torch.save({"model": model.state_dict()}, model_path)
     log.info(f"Saved model to {model_path}")
 
-    if config is None: return
+    if config is None:
+        return
     config_path = save_path / "config.yaml"
     with open(config_path, "w") as f:
         OmegaConf.save(config, f, resolve=True)
@@ -71,6 +73,8 @@ def load_from_pretrained(
         config = OmegaConf.load(config_path)
     else:
         log.warning(f"No config.yaml found in {model_dir}")
+    if "model" in config:
+        config = config.model
 
     if not return_model:
         return state_dict, config
