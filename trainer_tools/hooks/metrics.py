@@ -112,17 +112,18 @@ class MetricsHook(BaseHook):
         if self.use_tracker and val_stats:
             self.tracker.log(val_stats, trainer.step)
 
-        if self.verbose:
-            logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
-            for k in sorted(self.history.keys()):
-                if "valid_" not in k and self.history[k]:
-                    val = np.mean(self.history[k][-10:])  # smooth last 10 steps
-                    name = k.replace("train_", "T_") if k.startswith("train_") else k
-                    logs.append(f"{name}: {val:.3f}")
+        logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
 
-            for k, v in val_stats.items():
-                logs.append(f"V_{k[6:]}: {v:.3f}")
-            log.info(" | ".join(logs))
+        for k in sorted(self.history.keys()):
+            if "valid_" not in k and self.history[k] and (self.verbose or "loss" in k.lower()):
+                val = np.mean(self.history[k][-10:])  # smooth last 10 steps
+                logs.append(f"{k}: {val:.3f}")
+
+        for k, v in val_stats.items():
+            if self.verbose or "loss" in k.lower():
+                logs.append(f"{k}: {v:.3f}")
+
+        log.info(" | ".join(logs))
 
     def after_fit(self, trainer):
         if self.use_tracker:
