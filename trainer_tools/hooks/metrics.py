@@ -1,4 +1,4 @@
-import logging
+import logging, json
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
 from ..imports import *
@@ -32,10 +32,11 @@ class MetricsHook(BaseHook):
         metrics: List[Union[Metric, Callable]],
         verbose=True,
         tracker_type: str = None,
-        config=None,
+        config: Union[dict, str] = None,
         **tracker_kwargs,
     ):
-        self.verbose, self.config, self.tracker_kwargs = verbose, config, tracker_kwargs
+        self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
+        self.config = json.loads(config) if isinstance(config, str) else config
 
         self.metrics = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
         self._phases: dict[str, list[Metric]] = defaultdict(list)
