@@ -21,7 +21,7 @@ except ImportError:
     wandb, _HAS_WANDB = None, False
 
 
-class LoggerHook(BaseHook):
+class MetricsHook(BaseHook):
     """
     Aggregates data from multiple Metrics and logs to console/tracker.
     Only ONE instance of this hook is needed per Trainer.
@@ -42,13 +42,11 @@ class LoggerHook(BaseHook):
         for m in self.metrics:
             self._phases[m.phase].append(m)
 
-        # Buffers
-        self.step_data = {}
-        self.epoch_data = defaultdict(list)
-
-        # History now tracks values AND steps separately to handle freq > 1
-        self.history = defaultdict(list)  # {'train_loss': [0.5, 0.4...]}
-        self.history_steps = defaultdict(list)  # {'train_loss': [10, 20...]}
+        # Buffers & History
+        self.step_data = {}  # Current step buffer
+        self.epoch_data = defaultdict(list)  # Accumulator for epoch averages
+        self.history = defaultdict(list)
+        self.history_steps = defaultdict(list)
 
         self.steps_per_epoch = 0
         self._init_tracker(tracker_type)
@@ -64,7 +62,6 @@ class LoggerHook(BaseHook):
 
     def _run_metrics(self, trainer, phase):
         prefix = "train" if trainer.training else "valid"
-
         for m in self._phases[phase]:
             if not m.should_run(trainer):
                 continue
@@ -72,7 +69,7 @@ class LoggerHook(BaseHook):
             data = m(trainer)
             if not data:
                 continue
-            p_data = {f"{prefix}_{k}": v for k, v in data.items()}
+            p_data = data if not m.use_prefix else {f"{prefix}_{k}": v for k, v in data.items()}
             self.step_data.update(p_data)
 
             for k, v in p_data.items():
@@ -116,13 +113,11 @@ class LoggerHook(BaseHook):
 
         if self.verbose:
             logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
-            # Find latest train stats (handling different frequencies)
-            unique_metrics = set(k.split("_", 1)[1] for k in self.history if k.startswith("train_"))
-            for base_k in sorted(unique_metrics):
-                k = f"train_{base_k}"
-                if self.history[k]:
-                    # Simple average of last few collected points
-                    logs.append(f"T_{base_k}: {np.mean(self.history[k][-10:]):.3f}")
+            for k in sorted(self.history.keys()):
+                if "valid_" not in k and self.history[k]:
+                    val = np.mean(self.history[k][-10:])  # smooth last 10 steps
+                    name = k.replace("train_", "T_") if k.startswith("train_") else k
+                    logs.append(f"{name}: {val:.3f}")
 
             for k, v in val_stats.items():
                 logs.append(f"V_{k[6:]}: {v:.3f}")
@@ -132,21 +127,21 @@ class LoggerHook(BaseHook):
         if self.use_tracker:
             self.tracker.finish()
 
-    def plot(self, axes=None, metrics: List[str] = ["loss"]):
+    def plot(self, axes=None, metrics: Optional[List[str]] = ["loss"]):
         """
-        Plots collected metrics.
-
-        Args:
-            axes: Optional Matplotlib axes.
-            metrics: List of base metric names to plot (e.g. ["loss", "acc"]).
-                     Defaults to ["loss"]. If set to None, plots ALL collected metrics.
+        Plots metrics. Handles both prefixed (train_loss/valid_loss) and raw (grad_norm) keys.
+        If metrics is None, plots ALL available keys.
         """
+        all_keys = set()
+        for k in self.history.keys():
+            pre = "train_"
+            if k.startswith(pre):
+                all_keys.add(k[len(pre) :])
+            elif not k.startswith("valid_"):
+                all_keys.add(k)
 
-        available = sorted(list(set(k.split("_", 1)[1] for k in self.history if k.startswith("train_"))))
-        keys = available if metrics is None else [k for k in metrics if k in available]
-
+        keys = sorted(list(all_keys)) if metrics is None else [k for k in metrics if k in all_keys]
         if not keys:
-            log.warning("No matching metrics found to plot.")
             return
 
         if axes is None:
@@ -157,15 +152,14 @@ class LoggerHook(BaseHook):
             axes = [axes]
 
         for ax, key in zip(axes, keys):
-            # Train: Use recorded steps for X-axis
-            if t_y := self.history.get(f"train_{key}"):
-                t_x = self.history_steps.get(f"train_{key}")
-                ax.plot(t_x, t_y, label=f"Train {key}")
+            t_key = f"train_{key}" if f"train_{key}" in self.history else key
 
-            # Valid: Use recorded steps (epoch boundaries)
-            if v_y := self.history.get(f"valid_{key}"):
-                v_x = self.history_steps.get(f"valid_{key}")
-                ax.plot(v_x, v_y, "o-", label=f"Valid {key}")
+            if t_key in self.history:
+                ax.plot(self.history_steps[t_key], self.history[t_key], label=f"Train {key}")
+
+            v_key = f"valid_{key}"
+            if v_key in self.history:
+                ax.plot(self.history_steps[v_key], self.history[v_key], "o-", label=f"Valid {key}")
 
             ax.set_ylabel(key.title())
             ax.legend()

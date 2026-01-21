@@ -12,15 +12,18 @@ class Metric(ABC):
 
     Args:
         name: Identifier for the metric.
-        freq: How often to collect (in steps).
-        phase: The training phase to collect data. Must match a method name
-               in `BaseHook` (e.g., 'after_loss', 'after_backward').
+        freq: How often to collect (in steps) during TRAINING.
+              Validation always collects every step.
+        phase: The hook method name where collection occurs (e.g. 'after_loss').
+        use_prefix: If True (default), keys are prefixed with 'train_'/'valid_'.
+                    If False, keys are logged exactly as returned (e.g. 'grad_norm').
     """
 
-    def __init__(self, name: str = None, freq: int = 1, phase: str = "after_loss"):
+    def __init__(self, name: str = None, freq: int = 1, phase: str = "after_loss", use_prefix: bool = True):
         self.name = name
         self.freq = freq
         self.phase = phase
+        self.use_prefix = use_prefix
 
     def should_run(self, trainer) -> bool:
         if not trainer.training:
@@ -36,8 +39,8 @@ class Metric(ABC):
 class FunctionalMetric(Metric):
     """Wrapper to create a metric from a callable."""
 
-    def __init__(self, fn: Callable, name: str = None, freq: int = 1, phase="after_loss"):
-        super().__init__(name, freq, phase)
+    def __init__(self, fn: Callable, name: str = None, freq: int = 1, phase="after_loss", use_prefix=True):
+        super().__init__(name, freq, phase, use_prefix)
         self.fn = fn
 
     def __call__(self, trainer):
