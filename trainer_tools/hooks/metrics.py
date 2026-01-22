@@ -36,7 +36,7 @@ class MetricsHook(BaseHook):
         **tracker_kwargs,
     ):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
-        self.config = json.loads(config) if isinstance(config, str) else config
+        self.config = flatten_config(json.loads(config) if isinstance(config, str) else config)
 
         self.metrics = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
         self._phases: dict[str, list[Metric]] = defaultdict(list)
