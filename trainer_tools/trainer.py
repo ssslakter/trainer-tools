@@ -36,9 +36,9 @@ class Trainer:
     def __init__(
         self,
         model,
-        train_dl,
-        valid_dl,
-        optim: t.optim.Optimizer,
+        train_dl=None,
+        valid_dl=None,
+        optim: t.optim.Optimizer = None,
         loss_func: Callable = None,
         epochs=10,
         hooks=None,
@@ -97,6 +97,18 @@ class Trainer:
         """Run single epoch"""
         for self.batch_idx, self.batch in enumerate(self.dl):
             self._one_batch()
+
+    def evaluate(self, valid_dl=None):
+        """Evaluates the model on the validation dataset."""
+        self.model.to(self.device)
+        self._call_hook("before_fit")
+        self.model.eval()
+        self.training = False
+        self.dl = valid_dl if valid_dl is not None else self.valid_dl
+        self._call_hook("before_valid")
+        with torch.no_grad():
+            self._one_epoch()
+        self._call_hook("after_epoch")
 
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""
