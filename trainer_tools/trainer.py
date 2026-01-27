@@ -69,12 +69,12 @@ class Trainer:
 
     def _one_batch(self):
         """Process single batch forward, optionally with backward"""
-        self.xb, self.yb = to_device(self.batch, self.device)
-
-        self.step_handled_by_hook = False
-
         self._call_hook("before_step")
+
+        self.xb, self.yb = to_device(self.batch, self.device)
+        self.step_handled_by_hook = False
         self.preds = self.predict(self.xb)
+        
         self._call_hook("after_pred")
         self.loss_t = self.get_loss()
         if self.loss_t is not None:
