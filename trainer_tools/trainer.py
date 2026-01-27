@@ -77,7 +77,8 @@ class Trainer:
         self.preds = self.predict(self.xb)
         self._call_hook("after_pred")
         self.loss_t = self.get_loss()
-        self.loss = self.loss_t.item()
+        if self.loss_t is not None:
+            self.loss = self.loss_t.item()
         self._call_hook("after_loss")
         if self.model.training:
             self.loss_t.backward()
