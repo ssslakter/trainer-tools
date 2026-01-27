@@ -98,6 +98,8 @@ class Trainer:
 
     def evaluate(self, valid_dl=None):
         """Evaluates the model on the validation dataset."""
+        self.epoch = self.step = 0
+        self.n_steps = len(self.train_dl) * self.epochs
         self.model.to(self.device)
         self._call_hook("before_fit")
         self.model.eval()
