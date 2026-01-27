@@ -60,10 +60,7 @@ class Trainer:
             return self.preds["loss"]
 
         if self.loss_func is None:
-            raise ValueError(
-                "Could not calculate loss. Please provide a 'loss_func' or ensure the model returns a dict with 'loss' key."
-            )
-
+            return None
         return self.loss_func(self.preds, self.yb)
 
     def predict(self, xb) -> dict:
