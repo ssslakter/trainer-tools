@@ -31,6 +31,8 @@ class CheckpointHook(BaseHook):
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.saved_checkpoints: list[Path] = []
         self.config_saved = False
+        self._best_metric = float("inf")
+        self._best_ckpt_path: Optional[Path] = None
 
     def _save_config(self, trainer: Trainer):
         if self.config_saved:
@@ -42,7 +44,7 @@ class CheckpointHook(BaseHook):
         log.info(f"Saved config: {config_path}")
         self.config_saved = True
 
-    def _save(self, trainer: Trainer, filename: str):
+    def _save(self, trainer: Trainer, filename: str, is_best: bool = False):
         path = self.save_dir / filename
         state = {
             "model": trainer.model.state_dict(),
@@ -69,8 +71,13 @@ class CheckpointHook(BaseHook):
         torch.save(state, path)
         log.info(f"Saved checkpoint: {path}")
 
-        # Rotation logic
-        if "interrupted" in filename:
+        if "interrupted" in filename or "final" in filename:
+            return
+
+        if is_best:
+            if self._best_ckpt_path and self._best_ckpt_path.exists() and self._best_ckpt_path != path:
+                self._best_ckpt_path.unlink()
+            self._best_ckpt_path = path
             return
 
         self.saved_checkpoints.append(path),
@@ -94,20 +101,26 @@ class CheckpointHook(BaseHook):
     def after_step(self, trainer: Trainer):
         if not (trainer.training and trainer.step > 0 and trainer.step % self.every == 0):
             return
-        if self.save_strategy == "latest":
-            self._save(trainer, f"checkpoint_step_{trainer.step}.pt")
-        elif self.save_strategy == "best":
+
+        self._save(trainer, f"checkpoint_step_{trainer.step}.pt", is_best=False)
+
+        if self.save_strategy == "best":
             metrics_hook = trainer.get_hook(MetricsHook, None)
-            metrics = metrics_hook.metrics.get(self.metric, []) if metrics_hook else []
-            if not metrics:
-                log.warning(f"No MetricsHook or metric '{self.metric}' found, switching save_strategy to 'latest'.")
+            if metrics_hook is None:
+                log.warning("No MetricsHook found, switching save_strategy to 'latest'.")
                 self.save_strategy = "latest"
-                self._save(trainer, f"checkpoint_step_{trainer.step}.pt")
                 return
-            m = metrics[-1]
-            if not hasattr(self, '_best_metric') or m < self._best_metric:
-                self._best_metric = m
-                self._save(trainer, f"checkpoint_best_{trainer.step}.pt")
+
+            metrics = metrics_hook.metrics.get(self.metric, [])
+            if not metrics:
+                if trainer.step >= 3 * self.every:
+                    log.warning(f"Metric '{self.metric}' missing for 3+ saves; check metric name.")
+                return
+
+            current_metric = metrics[-1]
+            if current_metric < self._best_metric:
+                self._best_metric = current_metric
+                self._save(trainer, f"checkpoint_best_step_{trainer.step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt")
