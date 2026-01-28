@@ -9,10 +9,12 @@ log = logging.getLogger(__name__)
 
 class LRSchedulerHook(BaseHook):
     """A hook to integrate a PyTorch learning rate scheduler into the training loop."""
+
     ord = -100  # Run early but after CheckpointHook so it initializes sched before checkpoint loads it
 
-    def __init__(self, sched_fn, step_on_batch=True):
-        self.sched_fn, self.step_on_batch = sched_fn, step_on_batch
+    def __init__(self, sched_fn):
+        self.sched_fn = sched_fn
+        self._step = 0
 
     def before_fit(self, trainer):
         if isinstance(self.sched_fn, torch.optim.lr_scheduler.LRScheduler):
@@ -20,16 +22,14 @@ class LRSchedulerHook(BaseHook):
         else:
             self.sched = self.sched_fn(trainer.opt)
         self.lrs = []
+        self._step = 0
 
     def after_step(self, trainer):
-        # We log LR after the step, so it reflects the value used for the update
-        self.lrs.append(self.sched.get_last_lr()[0])
-        if self.step_on_batch and trainer.training:
-            self.sched.step()
-
-    def after_epoch(self, trainer):
-        if not self.step_on_batch:
-            self.sched.step()
+        if trainer.training:
+            current_lr = self.sched.get_last_lr()[0]
+            self.lrs.append(current_lr)
+            self.sched.step(self._step)
+            self._step += 1
 
     def plot_lrs(self, ax=None):
         "Plots the learning rate schedule over training steps."

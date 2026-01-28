@@ -56,8 +56,8 @@ class Loss(Metric):
 
 
 class Accuracy(Metric):
-    def __init__(self, freq=1):
-        super().__init__("accuracy", freq, phase="after_loss")
+    def __init__(self, name="accuracy", freq=1):
+        super().__init__(name, freq, phase="after_loss")
 
     def __call__(self, trainer: Trainer):
         if not hasattr(trainer, "preds") or not hasattr(trainer, "yb"):

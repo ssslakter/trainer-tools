@@ -88,8 +88,8 @@ class Trainer:
                 self.opt.zero_grad()
             else:
                 self.opt.zero_grad()
-            self.step += 1
         self._call_hook("after_step")
+        self.step += 1
 
     def _one_epoch(self):
         """Run single epoch"""

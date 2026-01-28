@@ -157,7 +157,9 @@ class CheckpointHook(BaseHook):
             from .optimization import LRSchedulerHook
 
             try:
-                trainer.get_hook(LRSchedulerHook).sched.load_state_dict(checkpoint["scheduler"])
+                lr_hook = trainer.get_hook(LRSchedulerHook)
+                lr_hook.sched.load_state_dict(checkpoint["scheduler"])
+                lr_hook._step = checkpoint['step']
             except KeyError:
                 log.warning("Checkpoint has scheduler state but no LRSchedulerHook found.")
         if "ema" in checkpoint:
