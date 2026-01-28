@@ -30,7 +30,7 @@ class MetricsHook(BaseHook):
 
     def __init__(
         self,
-        metrics: List[Union[Metric, Callable]],
+        metrics: List[Metric],
         verbose=True,
         tracker_type: str = None,
         config: Union[dict, str] = None,
@@ -39,7 +39,7 @@ class MetricsHook(BaseHook):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
         self.config = flatten_config(json.loads(config) if isinstance(config, str) else config)
 
-        self.metric_types = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
+        self.metric_types = metrics
         self._phases: dict[str, list[Metric]] = defaultdict(list)
         for m in self.metric_types:
             self._phases[m.phase].append(m)
