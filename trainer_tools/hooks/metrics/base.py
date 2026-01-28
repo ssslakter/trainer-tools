@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from trainer_tools.trainer import Trainer
-from ..imports import *
+from ...imports import *
 
 __all__ = ["Metric", "FunctionalMetric", "Loss", "Accuracy"]
 

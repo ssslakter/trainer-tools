@@ -1,9 +1,9 @@
 import logging, json
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
-from ..imports import *
-from .base import BaseHook
-from ..metrics import Metric, FunctionalMetric
+from ...imports import *
+from ...hooks.base import BaseHook
+from .base import Metric
 
 log = logging.getLogger(__name__)
 

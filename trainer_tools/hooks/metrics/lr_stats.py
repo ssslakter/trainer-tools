@@ -1,7 +1,7 @@
 from .base import Metric
-from ..hooks import LRSchedulerHook
-from ..trainer import Trainer
-from ..imports import *
+from ..optimization import LRSchedulerHook
+from ...trainer import Trainer
+from ...imports import *
 
 
 class LRStats(Metric):

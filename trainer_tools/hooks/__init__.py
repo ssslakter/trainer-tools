@@ -1,5 +1,5 @@
 from .base import BaseHook
-from .metrics import MetricsHook
+from .metrics import *
 from .pbar import ProgressBarHook
 from .optimization import LRSchedulerHook, AMPHook, GradClipHook
 from .checkpoint import CheckpointHook
