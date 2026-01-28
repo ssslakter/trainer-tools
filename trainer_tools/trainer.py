@@ -113,11 +113,11 @@ class Trainer:
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""
         self.n_steps = len(self.train_dl) * self.epochs
-        self.step = 0
+        self.step = self.start_epoch = 0
         self.model.to(self.device)
         self._call_hook("before_fit")
         try:
-            for self.epoch in range(self.epochs):
+            for self.epoch in range(self.start_epoch, self.epochs):
                 # Train
                 self.model.train()
                 self.training, self.dl = True, self.train_dl
