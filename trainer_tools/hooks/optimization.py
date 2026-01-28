@@ -14,7 +14,6 @@ class LRSchedulerHook(BaseHook):
 
     def __init__(self, sched_fn):
         self.sched_fn = sched_fn
-        self._step = 0
 
     def before_fit(self, trainer):
         if isinstance(self.sched_fn, torch.optim.lr_scheduler.LRScheduler):
@@ -22,14 +21,12 @@ class LRSchedulerHook(BaseHook):
         else:
             self.sched = self.sched_fn(trainer.opt)
         self.lrs = []
-        self._step = 0
 
     def after_step(self, trainer):
         if trainer.training:
             current_lr = self.sched.get_last_lr()[0]
             self.lrs.append(current_lr)
-            self.sched.step(self._step)
-            self._step += 1
+            self.sched.step()
 
     def plot_lrs(self, ax=None):
         "Plots the learning rate schedule over training steps."
