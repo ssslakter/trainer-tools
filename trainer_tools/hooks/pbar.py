@@ -6,9 +6,13 @@ from .base import BaseHook
 class ProgressBarHook(BaseHook):
     """A hook to display progress bars for epochs and batches."""
 
+    ord = 5
+
     def before_fit(self, trainer):
-        self.step = getattr(trainer, 'step', 0)
-        self.epoch_bar = tqdm(range(trainer.epochs), desc="Epoch", initial=getattr(trainer, 'epoch', 0), total=trainer.epochs)
+        self.step = getattr(trainer, "step", 0)
+        self.epoch_bar = tqdm(
+            range(trainer.epochs), desc="Epoch", initial=getattr(trainer, "epoch", 0), total=trainer.epochs
+        )
 
     def before_epoch(self, trainer):
         self.losses = []

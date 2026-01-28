@@ -26,6 +26,7 @@ class MetricsHook(BaseHook):
     Aggregates data from multiple Metrics and logs to console/tracker.
     Only ONE instance of this hook is needed per Trainer.
     """
+    ord = -10
 
     def __init__(
         self,
@@ -38,9 +39,9 @@ class MetricsHook(BaseHook):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
         self.config = flatten_config(json.loads(config) if isinstance(config, str) else config)
 
-        self.metrics = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
+        self.metric_types = [m if isinstance(m, Metric) else FunctionalMetric(m) for m in metrics]
         self._phases: dict[str, list[Metric]] = defaultdict(list)
-        for m in self.metrics:
+        for m in self.metric_types:
             self._phases[m.phase].append(m)
 
         # Buffers & History
@@ -51,6 +52,10 @@ class MetricsHook(BaseHook):
 
         self.steps_per_epoch = 0
         self._init_tracker(tracker_type)
+
+    @property
+    def metrics(self):
+        return self.history
 
     def _init_tracker(self, t_type):
         self.tracker, self.use_tracker = None, False

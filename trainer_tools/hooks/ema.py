@@ -10,6 +10,8 @@ log = logging.getLogger(__name__)
 class EMAHook(BaseHook):
     """Keeps Exponential moving average of a model"""
 
+    ord = 20
+
     def __init__(self, decay: float = 0.9999):
         self.decay = decay
         self.ema_model = None

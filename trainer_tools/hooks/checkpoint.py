@@ -6,7 +6,7 @@ from ..trainer import Trainer
 import os
 from omegaconf import OmegaConf
 from ..checkpoint import save_pretrained
-
+from .metrics import MetricsHook
 
 log = logging.getLogger(__name__)
 
@@ -17,13 +17,17 @@ class CheckpointHook(BaseHook):
     Can resume training from a checkpoint.
     """
 
-    ord = -50
-
     def __init__(
-        self, save_dir: str, save_every_steps: int = 1000, keep_last: int = 3, resume_path: Optional[str] = None
+        self,
+        save_dir: str,
+        save_every_steps: int = 1000,
+        keep_last: int = 3,
+        resume_path: Optional[str] = None,
+        save_strategy: Literal["best", "latest"] = "best",
+        metric_name: str = "valid_loss",
     ):
         self.save_dir, self.every, self.keep_last = Path(save_dir), save_every_steps, keep_last
-        self.resume_path = resume_path
+        self.resume_path, self.save_strategy, self.metric = resume_path, save_strategy, metric_name
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.saved_checkpoints: list[Path] = []
         self.config_saved = False
@@ -69,7 +73,7 @@ class CheckpointHook(BaseHook):
         if "interrupted" in filename:
             return
 
-        self.saved_checkpoints.append(path)
+        self.saved_checkpoints.append(path),
         if len(self.saved_checkpoints) <= self.keep_last:
             return
         oldest = self.saved_checkpoints.pop(0)
@@ -88,8 +92,22 @@ class CheckpointHook(BaseHook):
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
     def after_step(self, trainer: Trainer):
-        if trainer.training and trainer.step > 0 and trainer.step % self.every == 0:
+        if not (trainer.training and trainer.step > 0 and trainer.step % self.every == 0):
+            return
+        if self.save_strategy == "latest":
             self._save(trainer, f"checkpoint_step_{trainer.step}.pt")
+        elif self.save_strategy == "best":
+            metrics_hook = trainer.get_hook(MetricsHook, None)
+            metrics = metrics_hook.metrics.get(self.metric, []) if metrics_hook else []
+            if not metrics:
+                log.warning(f"No MetricsHook or metric '{self.metric}' found, switching save_strategy to 'latest'.")
+                self.save_strategy = "latest"
+                self._save(trainer, f"checkpoint_step_{trainer.step}.pt")
+                return
+            m = metrics[-1]
+            if not hasattr(self, '_best_metric') or m < self._best_metric:
+                self._best_metric = m
+                self._save(trainer, f"checkpoint_best_{trainer.step}.pt")
 
     def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt")
