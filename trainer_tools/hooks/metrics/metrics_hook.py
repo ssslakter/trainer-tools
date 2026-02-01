@@ -85,7 +85,8 @@ class MetricsHook(BaseHook):
                     self.history_steps[k].append(trainer.step)
 
     def before_fit(self, trainer):
-        self.steps_per_epoch = len(trainer.train_dl)
+        dl = getattr(trainer, "dl", getattr(trainer, "train_dl"))
+        self.steps_per_epoch = len(dl)
         if self.use_tracker:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
