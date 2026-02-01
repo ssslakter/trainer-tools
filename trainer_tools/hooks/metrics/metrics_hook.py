@@ -173,6 +173,6 @@ class MetricsHook(BaseHook):
             ax.legend()
             ax.grid(True, alpha=0.3)
 
-        if axes:
+        if axes is not None:
             axes[-1].set_xlabel("Steps")
         plt.tight_layout()
