@@ -99,12 +99,12 @@ class Trainer:
     def evaluate(self, valid_dl=None):
         """Evaluates the model on the validation dataset."""
         self.epoch = self.step = 0
-        self.n_steps = len(self.train_dl) * self.epochs
         self.model.to(self.device)
-        self._call_hook("before_fit")
-        self.model.eval()
         self.training = False
         self.dl = valid_dl if valid_dl is not None else self.valid_dl
+        self.n_steps = len(self.dl)
+        self.model.eval()
+        self._call_hook("before_fit")
         self._call_hook("before_valid")
         with torch.no_grad():
             self._one_epoch()
