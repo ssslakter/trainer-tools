@@ -89,7 +89,8 @@ class Trainer:
             else:
                 self.opt.zero_grad()
         self._call_hook("after_step")
-        self.step += 1
+        if self.model.training:
+            self.step += 1
 
     def _one_epoch(self):
         """Run single epoch"""
