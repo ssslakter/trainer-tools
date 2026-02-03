@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Union
 from .base import BaseHook
 from ..trainer import Trainer
 from ..utils import to_device
@@ -7,14 +7,18 @@ from ..utils import to_device
 class BatchTransformHook(BaseHook):
     """Applies batch transform to the input data."""
 
-    def __init__(self, transform: Optional[Callable] = None):
+    def __init__(self, transforms: Union[list, Callable, None] = None):
         """
         Args:
-            transform (Callable or None): A function that applies transform to a batch.
+            transforms (Callable or None): A function that applies transform to a batch.
         """
-        self.transform = transform
+        self.transforms = transforms
+        if not isinstance(self.transforms, list):
+            self.transforms = [self.transforms]
+        elif self.transforms is None:
+            self.transforms = []
 
     def before_step(self, trainer: Trainer):
-        if self.transform is not None:
+        for tfm in self.transforms:
             batch = to_device(trainer.batch, trainer.device)
-            trainer.batch = self.transform(*batch)
+            trainer.batch = tfm(*batch)
