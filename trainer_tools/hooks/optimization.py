@@ -64,7 +64,7 @@ class AMPHook(BaseHook):
         if trainer.training:
             trainer.autocast.__enter__()
 
-    def after_loss(self, trainer):
+    def after_loss(self, trainer: Trainer):
         """
         Called after loss calculation.
         We need to scale the loss *before* the backward pass.
@@ -79,12 +79,8 @@ class AMPHook(BaseHook):
         """
         Called after backward(). This is where we replace the optimizer step.
         """
-        # Unscale the gradients and step the optimizer
         if trainer.loss != 0:
             trainer.scaler.step(trainer.opt)
-            # Update the scale for next iteration
-            trainer.scaler.update()
-        # Signal to the trainer that the step and zero_grad have been handled
         trainer.step_handled_by_hook = True
 
 
@@ -95,9 +91,12 @@ class EmptyCudaCacheHook(BaseHook):
 
 class GradClipHook(BaseHook):
     """Hook to clip gradient"""
+    ord = AMPHook.ord - 1
 
     def __init__(self, max_norm=1.0):
         self.max_norm = max_norm
 
     def after_backward(self, trainer: Trainer):
+        if trainer.get_hook(AMPHook, None):
+            trainer.scaler.unscale_(trainer.opt)
         nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
