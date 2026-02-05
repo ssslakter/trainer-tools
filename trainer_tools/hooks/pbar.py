@@ -17,7 +17,10 @@ class ProgressBarHook(BaseHook):
     def before_epoch(self, trainer):
         self.losses = []
         trainer.dl = self.bar = tqdm(
-            trainer.dl, initial=self.step, desc=f"Epoch {trainer.epoch+1}/{trainer.epochs} [Train]", leave=False
+            trainer.dl,
+            initial=trainer.step % len(trainer.dl),
+            desc=f"Epoch {trainer.epoch+1}/{trainer.epochs} [Train]",
+            leave=False,
         )
 
     def before_valid(self, trainer):

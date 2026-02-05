@@ -17,6 +17,8 @@ class CheckpointHook(BaseHook):
     Can resume training from a checkpoint.
     """
 
+    ord = -3
+
     def __init__(
         self,
         save_dir: str,
