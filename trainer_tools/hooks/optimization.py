@@ -81,6 +81,7 @@ class AMPHook(BaseHook):
         """
         if trainer.loss != 0:
             trainer.scaler.step(trainer.opt)
+            trainer.scaler.update()
         trainer.step_handled_by_hook = True
 
 
