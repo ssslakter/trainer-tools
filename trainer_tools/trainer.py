@@ -116,6 +116,7 @@ class Trainer:
         self._call_hook("after_step")
         if self.model.training:
             self.step += 1
+        del self.preds, self.loss_t, self.batch
 
     def _one_epoch(self):
         """Run single epoch"""

@@ -38,4 +38,4 @@ dev = { features = ["dev"], solve-group = "default" }
 line-length = 120
 
 [dependency-groups]
-dev = ["jupyter","pytest"]
+dev = ["jupyter","pytest", "memray"]
