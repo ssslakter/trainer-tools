@@ -8,13 +8,11 @@ dependencies = [
     "datasets",
     "matplotlib",
     "transformers",
-    "jupyter",
     "tqdm",
     "trackio",
     "torchvision",
     "hydra-core",
-    "wandb"
-]
+    "wandb"]
 name = "trainer-tools"
 requires-python = ">= 3.11"
 version = "0.1.0"
@@ -30,9 +28,14 @@ platforms = ["linux-64", "win-64"]
 [tool.pixi.pypi-dependencies]
 trainer-tools = { path = ".", editable = true }
 
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 
-
 [tool.black]
 line-length = 120
+
+[dependency-groups]
+dev = ["jupyter","pytest"]
