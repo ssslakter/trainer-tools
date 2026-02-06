@@ -31,6 +31,7 @@ class Trainer:
        of hook instances or single hook to the `hooks` parameter during initialization.
     """
 
+    target_keys: list = ["y", "targets", "labels", "target", "label"]
     model: nn.Module
 
     def __init__(
@@ -54,29 +55,53 @@ class Trainer:
         for hook in sorted_hooks:
             getattr(hook, method_name, lambda trainer: None)(self)
 
-    def get_loss(self) -> torch.Tensor:
+    def get_loss(self, preds, target) -> torch.Tensor:
         """Calculates the loss for the current batch. Can be overwritten by a subclass."""
-        if isinstance(self.preds, dict) and "loss" in self.preds:
-            return self.preds["loss"]
+        if isinstance(preds, dict) and "loss" in preds:
+            return preds["loss"]
 
         if self.loss_func is None:
-            return None
-        return self.loss_func(self.preds, self.yb)
+            raise ValueError("No loss function provided. Please implement get_loss, provide loss_func or return loss from the model")
+        return self.loss_func(preds, target)
 
-    def predict(self, xb) -> dict:
+    def get_input(self, batch):
+        """Extracts inputs from the batch. Can be overwritten by a subclass."""
+        if isinstance(batch, (list, tuple)):
+            xb, _ = batch
+            return xb
+        elif isinstance(batch, dict):
+            return {k: v for k, v in batch.items() if k not in self.target_keys}
+        return batch
+
+    def get_target(self, batch):
+        """Extracts targets from the batch. Can be overwritten by a subclass."""
+        if isinstance(batch, (list, tuple)):
+            _, yb = batch
+            return yb
+        elif isinstance(batch, dict):
+            for key in self.target_keys:
+                if key in batch:
+                    return batch[key]
+        # if no target key is found, return input in case of self-supervised learning
+        return self.get_input(batch)
+
+    def predict(self, batch) -> dict:
         """Performs a forward pass on the model. Can be overwritten by a subclass."""
-        return self.model(xb)
+        inputs = self.get_input(batch)
+        if isinstance(inputs, dict):
+            return self.model(**inputs)
+        return self.model(inputs)
 
     def _one_batch(self):
         """Process single batch forward, optionally with backward"""
         self._call_hook("before_step")
 
-        self.xb, self.yb = to_device(self.batch, self.device)
+        self.batch = to_device(self.batch, self.device)
         self.step_handled_by_hook = False
-        self.preds = self.predict(self.xb)
-        
+        self.preds = self.predict(self.batch)
+
         self._call_hook("after_pred")
-        self.loss_t = self.get_loss()
+        self.loss_t = self.get_loss(self.preds, self.get_target(self.batch))
         if self.loss_t is not None:
             self.loss = self.loss_t.item()
         self._call_hook("after_loss")

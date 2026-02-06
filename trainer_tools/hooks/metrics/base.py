@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from trainer_tools.trainer import Trainer
 from ...imports import *
 
-__all__ = ["Metric", "FunctionalMetric", "Loss", "Accuracy"]
+__all__ = ["Metric", "Loss", "Accuracy"]
 
 
 class Metric(ABC):
@@ -36,17 +36,6 @@ class Metric(ABC):
         pass
 
 
-class FunctionalMetric(Metric):
-    """Wrapper to create a metric from a callable."""
-
-    def __init__(self, fn: Callable, name: str = None, freq: int = 1, phase="after_loss", use_prefix=True):
-        super().__init__(name, freq, phase, use_prefix)
-        self.fn = fn
-
-    def __call__(self, trainer):
-        return self.fn(trainer)
-
-
 class Loss(Metric):
     def __init__(self, freq=1):
         super().__init__("loss", freq, phase="after_loss")
@@ -56,11 +45,12 @@ class Loss(Metric):
 
 
 class Accuracy(Metric):
-    def __init__(self, name="accuracy", freq=1):
+    def __init__(self, name="accuracy", freq=1, preds_key="logits"):
         super().__init__(name, freq, phase="after_loss")
+        self.preds_key = preds_key
 
     def __call__(self, trainer: Trainer):
-        if not hasattr(trainer, "preds") or not hasattr(trainer, "yb"):
-            return {}
-        preds = trainer.preds.argmax(dim=1) if trainer.preds.ndim > 1 else (trainer.preds > 0.5)
-        return {self.name: (preds == trainer.yb).float().mean().item()}
+        target = trainer.get_target(trainer.batch)
+        logits = trainer.preds[self.preds_key] if isinstance(trainer.preds, dict) else trainer.preds
+        preds = logits.argmax(dim=1) if logits.ndim > 1 else (logits > 0.5)
+        return {self.name: (preds == target).float().mean().item()}

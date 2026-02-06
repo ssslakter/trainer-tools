@@ -26,6 +26,7 @@ class MetricsHook(BaseHook):
     Aggregates data from multiple Metrics and logs to console/tracker.
     Only ONE instance of this hook is needed per Trainer.
     """
+
     ord = -10
 
     def __init__(
@@ -37,7 +38,7 @@ class MetricsHook(BaseHook):
         **tracker_kwargs,
     ):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
-        self.config = flatten_config(json.loads(config) if isinstance(config, str) else config)
+        self.config = flatten_config(json.loads(config) if isinstance(config, str) else config or {})
 
         self.metric_types = metrics
         self._phases: dict[str, list[Metric]] = defaultdict(list)
@@ -79,6 +80,9 @@ class MetricsHook(BaseHook):
             self.step_data.update(p_data)
 
             for k, v in p_data.items():
+                if isinstance(v, torch.Tensor):
+                    v = v.detach().cpu()
+                    v = v.item() if v.numel() == 1 else v
                 self.epoch_data[k].append(v)
                 if trainer.training:
                     self.history[k].append(v)
