@@ -1,4 +1,5 @@
 from typing import Callable, Union, Optional
+import torch
 from .base import BaseHook
 from ..trainer import Trainer
 from ..utils import to_device
@@ -27,6 +28,7 @@ class BatchTransformHook(BaseHook):
         if not isinstance(self.batch_tfms, list):
             self.batch_tfms = [self.batch_tfms]
 
+    @torch.no_grad()
     def before_step(self, trainer: Trainer):
         xb, yb = to_device(trainer.batch, trainer.device)
         if trainer.training:
