@@ -113,13 +113,8 @@ class CheckpointHook(BaseHook):
                 self.save_strategy = "latest"
                 return
 
-            metrics = metrics_hook.metrics.get(self.metric, [])
-            if not metrics:
-                if trainer.step >= 3 * self.every:
-                    log.warning(f"Metric '{self.metric}' missing for 3+ saves; check metric name.")
-                return
-
-            current_metric = metrics[-1]
+            stats = metrics_hook.step_data if self.metric in metrics_hook.step_data else metrics_hook.epoch_data
+            current_metric = stats[self.metric]
             if current_metric < self._best_metric:
                 self._best_metric = current_metric
                 self._save(trainer, f"checkpoint_best_step_{trainer.step}.pt", is_best=True)

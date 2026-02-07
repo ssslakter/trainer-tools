@@ -50,6 +50,7 @@ class MetricsHook(BaseHook):
 
         # Buffers & History
         self.step_data = {}
+        self.epoch_data = {}
         self.aggregators = defaultdict(float)
         self.counts = defaultdict(int)
         self._init_tracker(tracker_type)
@@ -118,7 +119,7 @@ class MetricsHook(BaseHook):
         self.step_data.clear()
 
     def after_epoch(self, trainer):
-        epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
+        self.epoch_data = epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
         val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
         if self.use_tracker and val_stats:
