@@ -52,8 +52,7 @@ class AMPHook(BaseHook):
 
     def before_step(self, trainer):
         """Called before the forward pass. Enter the autocast context."""
-        if trainer.training:
-            trainer.autocast.__enter__()
+        trainer.autocast.__enter__()
 
     def after_loss(self, trainer: Trainer):
         """
@@ -61,10 +60,9 @@ class AMPHook(BaseHook):
         We need to scale the loss *before* the backward pass.
         The base trainer's self.loss_t.backward() will now operate on the scaled loss.
         """
-        if not trainer.training:
-            return
         trainer.autocast.__exit__(None, None, None)
-        trainer.loss_t = trainer.scaler.scale(trainer.loss_t)
+        if trainer.training:
+            trainer.loss_t = trainer.scaler.scale(trainer.loss_t)
 
     def after_backward(self, trainer):
         """
