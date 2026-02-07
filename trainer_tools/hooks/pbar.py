@@ -7,9 +7,9 @@ class ProgressBarHook(BaseHook):
     """A hook to display progress bars for epochs and batches."""
 
     ord = 5
+
     def __init__(self, freq=10):
         self.freq = freq
-
 
     def before_fit(self, trainer):
         self.step = getattr(trainer, "step", 0)
@@ -33,7 +33,7 @@ class ProgressBarHook(BaseHook):
     def after_step(self, trainer):
         self.running_loss += trainer.loss
         self.count += 1
-        if self.count % self.freq == 0:
+        if (self.count - 1) % self.freq == 0:
             self.bar.set_postfix(loss=f"{self.running_loss / self.count:.4f}", refresh=False)
 
     def after_epoch(self, trainer):
