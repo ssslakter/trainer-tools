@@ -20,24 +20,11 @@ class LRSchedulerHook(BaseHook):
             self.sched = self.sched_fn
         else:
             self.sched = self.sched_fn(trainer.opt)
-        self.lrs = []
 
     def after_step(self, trainer):
         if trainer.training:
-            current_lr = self.sched.get_last_lr()[0]
-            self.lrs.append(current_lr)
             self.sched.step()
 
-    def plot_lrs(self, ax=None):
-        "Plots the learning rate schedule over training steps."
-        if not ax:
-            _, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(self.lrs)
-        ax.set_title("Learning Rate Schedule")
-        ax.set_xlabel("Step")
-        ax.set_ylabel("Learning Rate")
-        ax.grid(True)
-        plt.show()
 
 
 class AMPHook(BaseHook):

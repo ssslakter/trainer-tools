@@ -35,10 +35,13 @@ class MetricsHook(BaseHook):
         verbose=True,
         tracker_type: str = None,
         config: Union[dict, str] = None,
+        freq: int = 1,
+        history_file: Optional[str] = "metrics.jsonl",
         **tracker_kwargs,
     ):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
         self.config = flatten_config(json.loads(config) if isinstance(config, str) else config or {})
+        self.freq, self.history_file = freq, Path(history_file)
 
         self.metric_types = metrics
         self._phases: dict[str, list[Metric]] = defaultdict(list)
@@ -46,17 +49,10 @@ class MetricsHook(BaseHook):
             self._phases[m.phase].append(m)
 
         # Buffers & History
-        self.step_data = {}  # Current step buffer
-        self.epoch_data = defaultdict(list)  # Accumulator for epoch averages
-        self.history = defaultdict(list)
-        self.history_steps = defaultdict(list)
-
-        self.steps_per_epoch = 0
+        self.step_data = {}
+        self.aggregators = defaultdict(float)
+        self.counts = defaultdict(int)
         self._init_tracker(tracker_type)
-
-    @property
-    def metrics(self):
-        return self.history
 
     def _init_tracker(self, t_type):
         self.tracker, self.use_tracker = None, False
@@ -66,6 +62,9 @@ class MetricsHook(BaseHook):
             self.tracker, self.use_tracker = wandb, True
         elif t_type:
             log.warning(f"Tracker '{t_type}' not found.")
+        elif self.history_file:
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
+            self.history_file.unlink(missing_ok=True)
 
     def _run_metrics(self, trainer, phase):
         prefix = "train" if trainer.training else "valid"
@@ -77,16 +76,15 @@ class MetricsHook(BaseHook):
             if not data:
                 continue
             p_data = data if not m.use_prefix else {f"{prefix}_{k}": v for k, v in data.items()}
-            self.step_data.update(p_data)
 
             for k, v in p_data.items():
                 if isinstance(v, torch.Tensor):
-                    v = v.detach().cpu()
-                    v = v.item() if v.numel() == 1 else v
-                self.epoch_data[k].append(v)
-                if trainer.training:
-                    self.history[k].append(v)
-                    self.history_steps[k].append(trainer.step)
+                    v = v.detach().cpu().item() if v.numel() == 1 else v.detach().cpu().numpy().tolist()
+
+                self.step_data[k] = v
+                if isinstance(v, (int, float)):
+                    self.aggregators[k] += v
+                    self.counts[k] += 1
 
     def before_fit(self, trainer):
         dl = getattr(trainer, "dl", getattr(trainer, "train_dl"))
@@ -95,7 +93,8 @@ class MetricsHook(BaseHook):
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
     def before_epoch(self, trainer):
-        self.epoch_data.clear()
+        self.aggregators.clear()
+        self.counts.clear()
 
     def after_pred(self, trainer):
         self._run_metrics(trainer, "after_pred")
@@ -108,30 +107,30 @@ class MetricsHook(BaseHook):
 
     def after_step(self, trainer):
         self._run_metrics(trainer, "after_step")
-        if trainer.training and self.use_tracker and self.step_data:
-            self.tracker.log(self.step_data, trainer.step)
+        self.step_data["step"] = trainer.step
+        if trainer.training and trainer.step % self.freq == 0:
+            if self.use_tracker:
+                self.tracker.log(self.step_data, trainer.step)
+            else:
+                with open(self.history_file, "a") as f:
+                    f.write(json.dumps(self.step_data) + "\n")
         self.step_data.clear()
 
     def after_epoch(self, trainer):
-        val_stats = {k: np.mean(v) for k, v in self.epoch_data.items() if k.startswith("valid_")}
-
-        for k, v in val_stats.items():
-            self.history[k].append(v)
-            self.history_steps[k].append((trainer.epoch + 1) * self.steps_per_epoch)
+        epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
+        val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
         if self.use_tracker and val_stats:
             self.tracker.log(val_stats, trainer.step)
+        elif val_stats:
+            with open(self.history_file, "a") as f:
+                f.write(json.dumps({"epoch": trainer.epoch, **epoch_means}) + "\n")
 
         logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
 
-        for k in sorted(self.history.keys()):
-            if "valid_" not in k and self.history[k] and (self.verbose or "loss" in k.lower()):
-                val = np.mean(self.history[k][-10:])  # smooth last 10 steps
-                logs.append(f"{k}: {val:.3f}")
-
-        for k, v in val_stats.items():
+        for k in sorted(epoch_means.keys()):
             if self.verbose or "loss" in k.lower():
-                logs.append(f"{k}: {v:.3f}")
+                logs.append(f"{k}: {epoch_means[k]:.4f}")
 
         log.info(" | ".join(logs))
 
@@ -139,44 +138,44 @@ class MetricsHook(BaseHook):
         if self.use_tracker:
             self.tracker.finish()
 
-    def plot(self, axes=None, metrics: Optional[List[str]] = ["loss"]):
-        """
-        Plots metrics. Handles both prefixed (train_loss/valid_loss) and raw (grad_norm) keys.
-        If metrics is None, plots ALL available keys.
-        """
-        all_keys = set()
-        for k in self.history.keys():
-            pre = "train_"
-            if k.startswith(pre):
-                all_keys.add(k[len(pre) :])
-            elif not k.startswith("valid_"):
-                all_keys.add(k)
+    def plot(self, axes=None, metrics=["loss"]):
+        self.history = load_metrics(self.history_file)
+        all_roots = {k.replace("train_", "").replace("valid_", "") for cat in self.history for k in self.history[cat]}
+        keys = sorted(all_roots) if metrics is None else [m for m in metrics if m in all_roots]
 
-        keys = sorted(list(all_keys)) if metrics is None else [k for k in metrics if k in all_keys]
         if not keys:
             return
 
         if axes is None:
-            fig, axes = plt.subplots(len(keys), 1, figsize=(7, 3 * len(keys)), sharex=True)
-            if len(keys) == 1:
-                axes = [axes]
-        elif not isinstance(axes, (list, np.ndarray)):
-            axes = [axes]
+            fig, axes = plt.subplots(len(keys), 1, figsize=(8, 4 * len(keys)))
+        axes = np.atleast_1d(axes)
 
-        for ax, key in zip(axes, keys):
-            t_key = f"train_{key}" if f"train_{key}" in self.history else key
+        for ax, root in zip(axes, keys):
+            for cat in ["step", "epoch"]:
+                for pre in ["train_", "valid_", ""]:
+                    full_key = f"{pre}{root}"
+                    if full_key in self.history[cat]:
+                        data = self.history[cat][full_key]
+                        fmt = "o-" if "valid" in pre or cat == "epoch" else "-"
+                        ax.plot(*data, fmt, label=f"{cat} {pre}{root}".strip())
 
-            if t_key in self.history:
-                ax.plot(self.history_steps[t_key], self.history[t_key], label=f"Train {key}")
-
-            v_key = f"valid_{key}"
-            if v_key in self.history:
-                ax.plot(self.history_steps[v_key], self.history[v_key], "o-", label=f"Valid {key}")
-
-            ax.set_ylabel(key.title())
+            ax.set_ylabel(root.replace("_", " ").title())
             ax.legend()
             ax.grid(True, alpha=0.3)
 
-        if axes is not None:
-            axes[-1].set_xlabel("Steps")
+        axes[-1].set_xlabel("Time (Step or Epoch)")
         plt.tight_layout()
+
+
+def load_metrics(path):
+    raw, res = defaultdict(list), {"step": {}, "epoch": {}}
+    with open(path) as f:
+        for d in (json.loads(l) for l in f if l.strip()):
+            k = "step" if "step" in d else "epoch"
+            idx = d.pop(k)
+            for metric, val in d.items():
+                raw[k, metric].append([idx, val])
+
+    for (k, metric), v in raw.items():
+        res[k][metric] = np.array(v, dtype=np.float32).T
+    return res

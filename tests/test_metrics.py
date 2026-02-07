@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from trainer_tools.trainer import Trainer
-from trainer_tools.hooks import MetricsHook, Loss
+from trainer_tools.hooks import MetricsHook, Loss, load_metrics
 from tests.conftest import LinearDataset
 
 
-def test_mse_metric_adequacy():
+def test_mse_metric_adequacy(tmp_path):
     """
     Verifies that the loss metric is calculated mathematically correctly.
 
@@ -29,8 +29,8 @@ def test_mse_metric_adequacy():
     model = nn.Linear(1, 1, bias=False)
     with torch.no_grad():
         model.weight.fill_(3.0)
-
-    metrics_hook = MetricsHook(metrics=[Loss()])
+    log_file = "metrics.jsonl"
+    metrics_hook = MetricsHook(metrics=[Loss()], history_file=log_file)
 
     trainer = Trainer(
         model=model,
@@ -44,17 +44,17 @@ def test_mse_metric_adequacy():
     )
 
     trainer.fit()
-
+    history = load_metrics(log_file)
     # Check Step-wise training loss
     # Batch 1 (x=1,2): Errors 1, 4 -> Mean 2.5
     # Batch 2 (x=3,4): Errors 9, 16 -> Mean 12.5
-    train_losses = metrics_hook.history["train_loss"]
+    _, train_losses = history["step"]["train_loss"]
     assert len(train_losses) == 2
     assert abs(train_losses[0] - 2.5) < 1e-5
     assert abs(train_losses[1] - 12.5) < 1e-5
 
     # Check Epoch-wise validation loss
     # (2.5 + 12.5) / 2 = 7.5 OR (1+4+9+16)/4 = 7.5
-    valid_losses = metrics_hook.history["valid_loss"]
+    _, valid_losses = history["epoch"]["valid_loss"]
     assert len(valid_losses) == 1
     assert abs(valid_losses[0] - 7.5) < 1e-5

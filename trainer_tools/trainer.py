@@ -116,12 +116,14 @@ class Trainer:
         self._call_hook("after_step")
         if self.model.training:
             self.step += 1
-        del self.preds, self.loss_t, self.batch
+        # free memory (hopefully helps)
+        self.loss_t = self.preds = None
 
     def _one_epoch(self):
         """Run single epoch"""
         for self.batch_idx, self.batch in enumerate(self.dl):
             self._one_batch()
+        self.batch = None
 
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""

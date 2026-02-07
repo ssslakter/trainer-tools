@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from trainer_tools.trainer import Trainer
-from trainer_tools.hooks import MetricsHook, Accuracy, Loss
+from trainer_tools.hooks import MetricsHook, Accuracy, Loss, load_metrics
 
 
 def test_trainer_tuple_dataloader(simple_model, tuple_loaders):
@@ -21,16 +21,13 @@ def test_trainer_tuple_dataloader(simple_model, tuple_loaders):
     trainer.fit()
 
     assert trainer.step > 0
-    # # Memory leak check: attributes should be cleared
-    # assert trainer.preds is None
-    # assert trainer.loss_t is None
 
 
-def test_trainer_dict_dataloader(hf_model, dict_loaders):
+def test_trainer_dict_dataloader(hf_model, dict_loaders, tmp_path):
     train_dl, valid_dl = dict_loaders
     opt = torch.optim.Adam(hf_model.parameters(), lr=0.01)
-
-    metrics = MetricsHook(metrics=[Accuracy(), Loss()])
+    hist_file = tmp_path / "metrics.jsonl"
+    metrics = MetricsHook(metrics=[Accuracy(), Loss()], history_file=hist_file)
 
     def loss_fn(preds, target):
         return torch.nn.functional.cross_entropy(preds["logits"], target)
@@ -45,6 +42,6 @@ def test_trainer_dict_dataloader(hf_model, dict_loaders):
         hooks=[metrics],
         device="cpu",
     )
-
     trainer.fit()
-    assert "train_loss" in metrics.history
+    history = load_metrics(hist_file)
+    assert "train_loss" in history["step"]
