@@ -1,79 +1,78 @@
+import torch
 import logging
-from torch.profiler import profile, ProfilerActivity, schedule
+from pathlib import Path
 from .base import BaseHook
-from ..imports import *
 
 log = logging.getLogger(__name__)
 
-class ProfilerHook(BaseHook):
+class MemoryProfilerHook(BaseHook):
     """
-    A Hook to profile memory and performance using PyTorch Profiler.
-    Optimized for finding RAM leaks.
+    PyTorch Memory Profiler Hook.
+    
+    Args:
+        save_dir: Where to save the .pickle files.
+        dump_every: Number of steps between snapshots.
+        max_entries: Limit history size to avoid overhead (default 100,000).
+        record_stacks: If 'all', captures stack traces for every allocation.
     """
-    ord = 100
+    ord = 100 # Runs late to ensure all step processing is finished
 
     def __init__(
-        self,
-        skip_first: int = 5,
-        wait: int = 1,
-        warmup: int = 1,
-        active: int = 3,
-        repeat: int = 1,
-        profile_memory: bool = True,
-        with_stack: bool = True,
-        save_dir: str = "./profiler_logs",
-        activities: Optional[List[ProfilerActivity]] = None
+        self, 
+        save_dir: str = "./memory_snapshots", 
+        dump_every: int = 200, 
+        max_entries: int = 100000,
+        mode: str = "all"
     ):
         self.save_dir = Path(save_dir)
-        self.profile_memory = profile_memory
-        self.with_stack = with_stack
-        
-        self.activities = activities or [ProfilerActivity.CPU]
-        if torch.cuda.is_available() and ProfilerActivity.CUDA not in self.activities:
-            self.activities.append(ProfilerActivity.CUDA)
-
-        self.schedule = schedule(
-            skip_first=skip_first,
-            wait=wait,
-            warmup=warmup,
-            active=active,
-            repeat=repeat
-        )
-
-    def _trace_handler(self, p):
-        """This runs whenever a cycle of 'active' steps finishes."""
-        self.save_dir.mkdir(parents=True, exist_ok=True)
-        
-        sort_by = "self_cpu_memory_usage" if self.profile_memory else "cpu_time_total"
-        table = p.key_averages().table(sort_by=sort_by, row_limit=15)
-        
-        log.info(f"\n--- PROFILER REPORT (Step {p.step_num}) ---\n{table}")
-
-        trace_path = self.save_dir / f"trace_step_{p.step_num}.json"
-        p.export_chrome_trace(str(trace_path))
-        log.info(f"Exported trace to {trace_path}")
-
-        try:
-            p.export_memory_timeline(str(self.save_dir / f"memory_step_{p.step_num}.html"))
-        except Exception:
-            pass
+        self.dump_every = dump_every
+        self.max_entries = max_entries
+        self.mode = mode
+        self._enabled = False
 
     def before_fit(self, trainer):
-        self.prof = profile(
-            activities=self.activities,
-            schedule=self.schedule,
-            on_trace_ready=self._trace_handler,
-            record_shapes=True,
-            profile_memory=self.profile_memory,
-            with_stack=self.with_stack
-        )
-        self.prof.__enter__()
-        log.info("Profiler Hook started. Waiting for 'active' steps to report...")
+        if not torch.cuda.is_available():
+            log.warning("MemoryProfilerHook: CUDA not available. Hook disabled.")
+            return
+
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            torch.cuda.memory._record_memory_history(
+                enabled=self.mode,
+                max_entries=self.max_entries
+            )
+            self._enabled = True
+            log.info(f"Memory history recording enabled (mode={self.mode}).")
+        except Exception as e:
+            log.error(f"Failed to start memory history recording: {e}")
 
     def after_step(self, trainer):
-        if trainer.training:
-            self.prof.step()
+        if not self._enabled or not trainer.training:
+            return
+
+        if trainer.step > 0 and trainer.step % self.dump_every == 0:
+            self._dump(f"step_{trainer.step}")
+
+    def after_cancel(self, trainer):
+        if self._enabled:
+            self._dump("interrupted")
+            self._disable()
 
     def after_fit(self, trainer):
-        self.prof.__exit__(None, None, None)
-        log.info("Profiler Hook shut down.")
+        if self._enabled:
+            self._dump("final")
+            self._disable()
+
+    def _dump(self, label: str):
+        path = self.save_dir / f"snapshot_{label}.pickle"
+        try:
+            torch.cuda.memory._dump_snapshot(str(path))
+            log.info(f"Memory snapshot saved: {path} -> Upload to https://pytorch.org/memory_viz")
+        except Exception as e:
+            log.error(f"Failed to dump memory snapshot: {e}")
+
+    def _disable(self):
+        torch.cuda.memory._record_memory_history(enabled=None)
+        self._enabled = False
+        log.info("Memory history recording disabled.")

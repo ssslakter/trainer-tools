@@ -110,7 +110,8 @@ class MetricsHook(BaseHook):
         self.step_data["step"] = trainer.step
         if trainer.training and trainer.step % self.freq == 0:
             if self.use_tracker:
-                self.tracker.log(self.step_data, trainer.step)
+                current_step = self.step_data.pop("step", trainer.step)
+                self.tracker.log(self.step_data, current_step)
             else:
                 with open(self.history_file, "a") as f:
                     f.write(json.dumps(self.step_data) + "\n")
