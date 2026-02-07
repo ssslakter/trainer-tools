@@ -15,6 +15,10 @@ class LRSchedulerHook(BaseHook):
     def __init__(self, sched_fn):
         self.sched_fn = sched_fn
 
+    @property
+    def lr(self):
+        return self.sched.get_last_lr()[0]
+
     def before_fit(self, trainer):
         if isinstance(self.sched_fn, torch.optim.lr_scheduler.LRScheduler):
             self.sched = self.sched_fn

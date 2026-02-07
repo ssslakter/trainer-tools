@@ -16,4 +16,4 @@ class LRStats(Metric):
         return super().should_run(trainer)
 
     def __call__(self, trainer: Trainer):
-        return {self.name: trainer.get_hook(LRSchedulerHook).lrs[-1]}
+        return {self.name: trainer.get_hook(LRSchedulerHook).lr}
