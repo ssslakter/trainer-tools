@@ -5,17 +5,25 @@ authors = [
 dependencies = [
     "torch>=2.7",
     "numpy",
-    "datasets",
     "matplotlib",
-    "transformers",
     "tqdm",
     "trackio",
-    "torchvision",
     "hydra-core",
-    "wandb"]
+    "wandb",
+]
 name = "trainer-tools"
+readme = "README.md"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "0.1.2"
+license = { file = "LICENSE" }
+keywords = ["pytorch", "deep-learning", "training", "trainer"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
 
 [build-system]
 build-backend = "hatchling.build"
@@ -31,6 +39,7 @@ trainer-tools = { path = ".", editable = true }
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
 
 [tool.pixi.tasks]
 
@@ -38,4 +47,10 @@ dev = { features = ["dev"], solve-group = "default" }
 line-length = 120
 
 [dependency-groups]
-dev = ["jupyter","pytest", "memray"]
+dev = ["jupyter", "pytest", "memray", "build", "twine"]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-autorefs"
+]
