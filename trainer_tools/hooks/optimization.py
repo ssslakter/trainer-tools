@@ -26,7 +26,7 @@ class LRSchedulerHook(BaseHook):
             self.sched = self.sched_fn(trainer.opt)
 
     def after_step(self, trainer):
-        if trainer.training:
+        if trainer.training and not getattr(trainer, "skip_zero_grad", False):
             self.sched.step()
 
 
@@ -68,6 +68,9 @@ class AMPHook(BaseHook):
         """
         Called after backward(). This is where we replace the optimizer step.
         """
+        if getattr(trainer, "step_handled_by_hook", False):
+            return
+
         if trainer.loss != 0:
             trainer.scaler.step(trainer.opt)
             trainer.scaler.update()
@@ -87,6 +90,42 @@ class GradClipHook(BaseHook):
         self.max_norm = max_norm
 
     def after_backward(self, trainer: Trainer):
+        if getattr(trainer, "skip_zero_grad", False):
+            return
+
         if trainer.get_hook(AMPHook, None):
             trainer.scaler.unscale_(trainer.opt)
         nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
+
+class GradientAccumulationHook(BaseHook):
+    """
+    Accumulates gradients over multiple steps.
+    """
+
+    ord = -10
+
+    def __init__(self, steps: int = 1):
+        self.steps = steps
+
+    def after_loss(self, trainer):
+        if trainer.training:
+            trainer.loss_t = trainer.loss_t / self.steps
+
+    def after_backward(self, trainer):
+        if not trainer.training:
+            return
+
+        step_idx = trainer.step + 1
+        is_update = (step_idx % self.steps == 0)
+
+        # Also check end of epoch
+        if hasattr(trainer, "dl") and hasattr(trainer, "batch_idx"):
+            try:
+                if trainer.batch_idx + 1 == len(trainer.dl):
+                    is_update = True
+            except TypeError:
+                pass  # len() might fail
+
+        if not is_update:
+            trainer.step_handled_by_hook = True
+            trainer.skip_zero_grad = True

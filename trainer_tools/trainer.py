@@ -98,6 +98,7 @@ class Trainer:
 
         self.batch = to_device(self.batch, self.device)
         self.step_handled_by_hook = False
+        self.skip_zero_grad = False
         self.preds = self.predict(self.batch)
 
         self._call_hook("after_pred")
@@ -112,12 +113,14 @@ class Trainer:
                 self.opt.step()
                 self.opt.zero_grad()
             else:
-                self.opt.zero_grad()
+                if not getattr(self, "skip_zero_grad", False):
+                    self.opt.zero_grad()
         self._call_hook("after_step")
         if self.model.training:
             self.step += 1
         # free memory (hopefully helps)
         self.loss_t = self.preds = None
+        self.skip_zero_grad = False
 
     def _one_epoch(self):
         """Run single epoch"""
