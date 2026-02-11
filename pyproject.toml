@@ -46,8 +46,6 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }
 
-[tool.pixi.tasks]
-
 [tool.black]
 line-length = 120
 
@@ -58,17 +56,18 @@ allow_zero_version = true
 major_on_zero = false
 
 [tool.semantic_release.commit_parser_options]
-allowed_tags = ["patch", "major", "minor", "breaking", "fix", "feat"]
-major_tags = ["major", "breaking"]
+allowed_tags = ["patch", "minor", "fix", "feat"]
 minor_tags = ["minor", "feat"]
 patch_tags = ["fix", "patch"]
 default_bump_level = 0
 
 [dependency-groups]
-dev = ["jupyter", "pytest", "memray", "build", "twine", "python-semantic-release"]
-docs = [
-    "mkdocs",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-    "mkdocs-autorefs"
+dev = [
+    "jupyter",
+    "pytest",
+    "memray",
+    "build",
+    "twine",
+    "python-semantic-release",
 ]
+docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-autorefs"]
