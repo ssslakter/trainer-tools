@@ -2,6 +2,7 @@
 authors = [
     { name = "Slava Chaunin", email = "67190162+Ssslakter@users.noreply.github.com" },
 ]
+description = "Small utilities to simplify trainining of PyTorch models."
 dependencies = [
     "torch>=2.7",
     "numpy",
@@ -23,7 +24,8 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-
+[project.urls]
+"Repository" = "https://github.com/ssslakter/trainer-tools"
 
 [build-system]
 build-backend = "hatchling.build"

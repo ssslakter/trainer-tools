@@ -1,3 +1,13 @@
+<p align="center">
+  <a href="https://pypi.org/project/trainer-tools/">
+    <img src="https://img.shields.io/pypi/v/trainer-tools.svg" alt="PyPI version">
+  </a>
+  <a href="https://github.com/ssslakter/trainer-tools">
+    <img src="https://img.shields.io/github/stars/ssslakter/trainer-tools?style=social" alt="GitHub stars">
+  </a>
+  <img src="https://img.shields.io/pypi/pyversions/trainer-tools" alt="Python Versions">
+</p>
+
 # Trainer Tools
 
 A lightweight, hook-based training loop for PyTorch. `trainer-tools` abstracts away the boilerplate of training loops while remaining fully customizable via a powerful flexible hook system.
