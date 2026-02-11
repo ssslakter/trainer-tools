@@ -25,7 +25,8 @@ def random_seed(seed: Optional[int], full_determinism: bool = False):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
     # For deterministic behavior (may reduce performance)
     if full_determinism:
         torch.backends.cudnn.deterministic = True

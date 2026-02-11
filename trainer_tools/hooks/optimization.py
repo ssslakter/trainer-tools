@@ -79,7 +79,8 @@ class AMPHook(BaseHook):
 
 class EmptyCudaCacheHook(BaseHook):
     def before_valid(self, trainer):
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 class GradClipHook(BaseHook):

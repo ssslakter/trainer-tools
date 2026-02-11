@@ -73,7 +73,7 @@ def load_from_pretrained(
         config = OmegaConf.load(config_path)
     else:
         log.warning(f"No config.yaml found in {model_dir}")
-    if "model" in config:
+    if config and "model" in config:
         config = config.model
 
     if not return_model:

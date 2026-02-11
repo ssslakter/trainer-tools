@@ -54,9 +54,10 @@ class CheckpointHook(BaseHook):
             "epoch": trainer.epoch,
             "step": trainer.step,
             "rng_torch": torch.get_rng_state(),
-            "rng_cuda": torch.cuda.get_rng_state(),
             "rng_numpy": np.random.get_state(),
         }
+        if torch.cuda.is_available():
+            state["rng_cuda"] = torch.cuda.get_rng_state()
         # Save Scaler state if AMP is used
         if hasattr(trainer, "scaler"):
             state["scaler"] = trainer.scaler.state_dict()
@@ -143,7 +144,7 @@ class CheckpointHook(BaseHook):
         trainer.step = checkpoint["step"]
 
         torch.set_rng_state(checkpoint["rng_torch"].cpu())
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and "rng_cuda" in checkpoint:
             torch.cuda.set_rng_state(checkpoint["rng_cuda"].cpu())
         np.random.set_state(checkpoint["rng_numpy"])
 
