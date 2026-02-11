@@ -1,29 +1,26 @@
-name: Publish to PyPI
+name: Semantic Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [ main ]
 
 jobs:
-  pypi-publish:
-    name: Upload to PyPI
+  release:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: "3.x"
+          fetch-depth: 0
 
-      - name: Install build dependencies
-        run: pip install build
-
-      - name: Build distribution
-        run: python -m build
+      - name: Python Semantic Release
+        id: psr
+        uses: python-semantic-release/python-semantic-release@v9.16.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
+        if: steps.psr.outputs.released == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
