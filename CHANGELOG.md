@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.1.4 (2026-02-12)
+
+### Patch
+
+- Update batch transforms, simplify skip optimizer, update evaluate
+  ([`64a7098`](https://github.com/ssslakter/trainer-tools/commit/64a709800cc92c7728248757faff29403ca326de))
+
+
 ## v0.1.3 (2026-02-11)
 
 ### Bug Fixes
