@@ -30,13 +30,29 @@ class BatchTransformHook(BaseHook):
 
     @torch.no_grad()
     def before_step(self, trainer: Trainer):
-        xb, yb = to_device(trainer.batch, trainer.device)
+        trainer.batch = to_device(trainer.batch, trainer.device)
+        xb = trainer.get_input(trainer.batch)
+        yb = trainer.get_target(trainer.batch)
+
         if trainer.training:
-            xb = xb if self.x_tfm is None else self.x_tfm(xb)
-            yb = yb if self.y_tfm is None else self.y_tfm(yb)
+            if self.x_tfm is not None:
+                xb = self.x_tfm(xb)
+            if self.y_tfm is not None:
+                yb = self.y_tfm(yb)
         else:
-            xb = xb if self.x_tfms_valid is None else self.x_tfms_valid(xb)
-            yb = yb if self.y_tfms_valid is None else self.y_tfms_valid(yb)
+            if self.x_tfms_valid is not None:
+                xb = self.x_tfms_valid(xb)
+            if self.y_tfms_valid is not None:
+                yb = self.y_tfms_valid(yb)
+
+        if isinstance(trainer.batch, (list, tuple)):
+            trainer.batch = (xb, yb)
+        elif isinstance(trainer.batch, dict):
+            trainer.batch.update(yb)
+            # update xb after yb in case they return the same dict
+            trainer.batch.update(xb)
+        else:
+            trainer.batch = xb
+
         for tfm in self.batch_tfms:
-            xb, yb = tfm(xb, yb)
-        trainer.batch = (xb, yb)
+            trainer.batch = tfm(trainer.batch)

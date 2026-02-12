@@ -68,13 +68,13 @@ class AMPHook(BaseHook):
         """
         Called after backward(). This is where we replace the optimizer step.
         """
-        if getattr(trainer, "step_handled_by_hook", False):
+        if getattr(trainer, "skip_opt_step", False):
             return
 
         if trainer.loss != 0:
             trainer.scaler.step(trainer.opt)
             trainer.scaler.update()
-        trainer.step_handled_by_hook = True
+        trainer.skip_opt_step = True
 
 
 class EmptyCudaCacheHook(BaseHook):
@@ -128,5 +128,5 @@ class GradientAccumulationHook(BaseHook):
                 pass  # len() might fail
 
         if not is_update:
-            trainer.step_handled_by_hook = True
+            trainer.skip_opt_step = True
             trainer.skip_zero_grad = True
