@@ -45,8 +45,9 @@ class AMPHook(BaseHook):
 
     def before_fit(self, trainer):
         """Called before training starts. Initialize the scaler."""
-        trainer.scaler = GradScaler(enabled=self.enabled)
-        # We manually control the autocast context manager
+        has_bf16_params = any(p.dtype == torch.bfloat16 for p in trainer.model.parameters())
+        use_scaler = self.enabled and self.dtype == torch.float16 and not has_bf16_params
+        trainer.scaler = GradScaler(enabled=use_scaler)
         trainer.autocast = autocast(self.device_type, enabled=self.enabled, dtype=self.dtype)
         log.info(f"Mixed Precision Training: {'Enabled' if self.enabled else 'Disabled'}")
 
@@ -94,7 +95,7 @@ class GradClipHook(BaseHook):
         if getattr(trainer, "skip_zero_grad", False):
             return
 
-        if trainer.get_hook(AMPHook, None):
+        if trainer.get_hook(AMPHook, None) and trainer.scaler.is_enabled():
             trainer.scaler.unscale_(trainer.opt)
         nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
 
