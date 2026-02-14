@@ -9,7 +9,8 @@ log = logging.getLogger(__name__)
 
 try:
     import trackio as tio
-
+    import os
+    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
     _HAS_TIO = True
 except ImportError:
     tio, _HAS_TIO = None, False
@@ -59,6 +60,9 @@ class MetricsHook(BaseHook):
         self.tracker, self.use_tracker = None, False
         if t_type == "trackio" and _HAS_TIO:
             self.tracker, self.use_tracker = tio, True
+            # improves performance
+            if 'embed' not in self.tracker_kwargs:
+                self.tracker_kwargs['embed'] = False
         elif t_type == "wandb" and _HAS_WANDB:
             self.tracker, self.use_tracker = wandb, True
         elif t_type:
