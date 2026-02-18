@@ -50,6 +50,10 @@ class Trainer:
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
 
+    @property
+    def is_main(self):
+        return not hasattr(self, "accelerator") or self.accelerator.is_main_process
+
     def _call_hook(self, method_name):
         sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
         for hook in sorted_hooks:
@@ -97,6 +101,8 @@ class Trainer:
         self._call_hook("before_step")
 
         self.batch = to_device(self.batch, self.device)
+        
+        self.skip_backward = False
         self.skip_opt_step = False
         self.skip_zero_grad = False
         self.preds = self.predict(self.batch)
@@ -107,7 +113,7 @@ class Trainer:
             self.loss = self.loss_t.item()
         self._call_hook("after_loss")
         if self.model.training:
-            self.loss_t.backward()
+            if not self.skip_backward: self.loss_t.backward()
             self._call_hook("after_backward")
             if not self.skip_opt_step: self.opt.step()
             if not self.skip_zero_grad: self.opt.zero_grad()
