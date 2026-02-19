@@ -1,7 +1,14 @@
 import logging
 from ..trainer import Trainer
 from ..imports import *
-from torch.amp import GradScaler, autocast
+try:
+    from torch.amp import GradScaler, autocast
+except ImportError:
+    try:
+        from torch.cuda.amp import GradScaler
+    except ImportError:
+        from torch.cpu.amp import GradScaler
+    from torch import autocast
 from .base import BaseHook
 
 log = logging.getLogger(__name__)
