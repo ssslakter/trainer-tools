@@ -16,7 +16,7 @@ dependencies = [
 name = "trainer-tools"
 readme = "README.md"
 requires-python = ">= 3.11"
-version = "0.1.4"
+version = "0.2.0"
 license = { file = "LICENSE" }
 keywords = ["pytorch", "deep-learning", "training", "trainer"]
 classifiers = [

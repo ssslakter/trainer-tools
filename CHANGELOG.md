@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.0 (2026-02-19)
+
+### Features
+
+- Accelerate
+  ([`4934c94`](https://github.com/ssslakter/trainer-tools/commit/4934c94d52b40223c00d00cc82dee71da9a66b58))
+
+
 ## v0.1.4 (2026-02-12)
 
 ### Patch
