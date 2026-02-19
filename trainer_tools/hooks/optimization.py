@@ -33,7 +33,7 @@ class LRSchedulerHook(BaseHook):
             self.sched = self.sched_fn(trainer.opt)
 
     def after_step(self, trainer):
-        if trainer.training and not getattr(trainer, "skip_zero_grad", False):
+        if trainer.training and not trainer.skip_zero_grad:
             self.sched.step()
 
 

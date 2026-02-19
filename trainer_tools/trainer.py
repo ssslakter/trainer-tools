@@ -1,5 +1,5 @@
 from typing import Type, TypeVar
-
+from accelerate import Accelerator
 from .imports import *
 from .utils import default_device, to_device
 
@@ -49,10 +49,15 @@ class Trainer:
         self.model, self.train_dl, self.valid_dl, self.opt, self.loss_func = model, train_dl, valid_dl, optim, loss_func
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
+        self.accelerator: Accelerator = None
 
     @property
     def is_main(self):
-        return not hasattr(self, "accelerator") or self.accelerator.is_main_process
+        return not self.is_distributed or self.accelerator.is_main_process
+    
+    @property
+    def is_distributed(self):
+        return self.accelerator is not None
 
     def _call_hook(self, method_name):
         sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
@@ -99,8 +104,8 @@ class Trainer:
     def _one_batch(self):
         """Process single batch forward, optionally with backward"""
         self._call_hook("before_step")
-
-        self.batch = to_device(self.batch, self.device)
+        if not self.is_distributed:
+            self.batch = to_device(self.batch, self.device)
         
         self.skip_backward = False
         self.skip_opt_step = False
@@ -134,8 +139,8 @@ class Trainer:
         """Starts the training and validation loops for the specified number of epochs."""
         self.n_steps = len(self.train_dl) * self.epochs
         self.step = self.start_epoch = 0
-        self.model.to(self.device)
         self._call_hook("before_fit")
+        self.model.to(self.device)
         try:
             for self.epoch in range(self.start_epoch, self.epochs):
                 # Train

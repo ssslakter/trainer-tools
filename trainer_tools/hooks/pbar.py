@@ -14,23 +14,36 @@ class ProgressBarHook(BaseHook):
     def before_fit(self, trainer):
         self.step = getattr(trainer, "step", 0)
         self.epoch_bar = tqdm(
-            range(trainer.epochs), desc="Epoch", initial=getattr(trainer, "epoch", 0), total=trainer.epochs
+            range(trainer.epochs),
+            desc="Epoch",
+            initial=getattr(trainer, "epoch", 0),
+            total=trainer.epochs,
+            disable=not trainer.is_main,
         )
 
     def before_epoch(self, trainer):
-        self.running_loss, self.count = 0.0, 0
-        trainer.dl = self.bar = tqdm(
-            trainer.dl,
-            initial=trainer.step % len(trainer.dl),
+        self._init_pbar(
+            trainer,
             desc=f"Epoch {trainer.epoch+1}/{trainer.epochs} [Train]",
-            leave=False,
+            initial=trainer.step % len(trainer.train_dl),
         )
 
     def before_valid(self, trainer):
+        self._init_pbar(trainer, desc=f"Epoch {trainer.epoch+1}/{trainer.epochs} [Valid]")
+
+    def _init_pbar(self, trainer, desc, initial=0):
         self.running_loss, self.count = 0.0, 0
-        trainer.dl = self.bar = tqdm(trainer.dl, desc=f"Epoch {trainer.epoch+1}/{trainer.epochs} [Valid]", leave=False)
+        trainer.dl = self.bar = tqdm(
+            trainer.dl,
+            initial=initial,
+            desc=desc,
+            leave=False,
+            disable=not trainer.is_main,
+        )
 
     def after_step(self, trainer):
+        if not trainer.is_main:
+            return
         self.running_loss += trainer.loss
         self.count += 1
         if (self.count - 1) % self.freq == 0:

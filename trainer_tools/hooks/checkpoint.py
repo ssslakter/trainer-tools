@@ -15,6 +15,9 @@ class CheckpointHook(BaseHook):
     """
     Saves model, optimizer, scheduler, scaler, and RNG states.
     Can resume training from a checkpoint.
+
+    Works transparently in both single-device and distributed (Accelerate)
+    setups.
     """
 
     ord = -3
@@ -36,8 +39,32 @@ class CheckpointHook(BaseHook):
         self._best_metric = float("inf")
         self._best_ckpt_path: Optional[Path] = None
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _unwrap_model(trainer: Trainer, model: nn.Module | None = None):
+        """Return the raw model, stripping any DDP/FSDP wrapper."""
+        model = model or trainer.model
+        if trainer.is_distributed:
+            return trainer.accelerator.unwrap_model(model)
+        return model
+
+    @staticmethod
+    def _get_scaler(trainer: Trainer):
+        """Return the GradScaler from AMPHook or Accelerate, or None."""
+        if hasattr(trainer, "scaler"):
+            return trainer.scaler
+        accel = getattr(trainer, "accelerator", None)
+        if accel is not None:
+            scaler = getattr(accel, "scaler", None)
+            if scaler is not None and scaler.is_enabled():
+                return scaler
+        return None
+
     def _save_config(self, trainer: Trainer):
-        if self.config_saved:
+        if self.config_saved or not trainer.is_main:
             return
         if not (config := getattr(trainer, "config", None)):
             return
@@ -46,10 +73,21 @@ class CheckpointHook(BaseHook):
         log.info(f"Saved config: {config_path}")
         self.config_saved = True
 
-    def _save(self, trainer: Trainer, filename: str, is_best: bool = False):
+    # ------------------------------------------------------------------
+    # Save / load
+    # ------------------------------------------------------------------
+
+    def _save(self, trainer: Trainer, filename: str, *, is_best: bool = False, sync: bool = True):
+        # Synchronise all processes so every rank has finished the step.
+        # Skipped for interrupt saves where a barrier could deadlock.
+        if trainer.is_distributed and sync:
+            trainer.accelerator.wait_for_everyone()
+        if not trainer.is_main:
+            return
+
         path = self.save_dir / filename
         state = {
-            "model": trainer.model.state_dict(),
+            "model": self._unwrap_model(trainer).state_dict(),
             "opt": trainer.opt.state_dict(),
             "epoch": trainer.epoch,
             "step": trainer.step,
@@ -58,16 +96,13 @@ class CheckpointHook(BaseHook):
         }
         if torch.cuda.is_available():
             state["rng_cuda"] = torch.cuda.get_rng_state()
-        # Save Scaler state if AMP is used
-        if hasattr(trainer, "scaler"):
-            state["scaler"] = trainer.scaler.state_dict()
+        if (scaler := self._get_scaler(trainer)) is not None:
+            state["scaler"] = scaler.state_dict()
 
-        # Save Scheduler state if LRSchedulerHook exists
         from .optimization import LRSchedulerHook
 
         if sched_hook := trainer.get_hook(LRSchedulerHook, None):
             state["scheduler"] = sched_hook.sched.state_dict()
-
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
             state["ema"] = ema_hook.ema_model.state_dict()
 
@@ -83,7 +118,7 @@ class CheckpointHook(BaseHook):
             self._best_ckpt_path = path
             return
 
-        self.saved_checkpoints.append(path),
+        self.saved_checkpoints.append(path)
         if len(self.saved_checkpoints) <= self.keep_last:
             return
         oldest = self.saved_checkpoints.pop(0)
@@ -121,11 +156,14 @@ class CheckpointHook(BaseHook):
                 self._save(trainer, f"checkpoint_best_step_{trainer.step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
-        self._save(trainer, "checkpoint_interrupted.pt")
+        self._save(trainer, "checkpoint_interrupted.pt", sync=False)
 
     def after_fit(self, trainer: Trainer):
         self._save(trainer, "model_final.pt")
-        model_to_save = trainer.model
+        if not trainer.is_main:
+            return
+
+        model_to_save = self._unwrap_model(trainer)
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
             model_to_save = ema_hook.ema_model
             log.info("Using EMA model for pretrained export")
@@ -133,12 +171,13 @@ class CheckpointHook(BaseHook):
         save_pretrained(model_to_save, self.save_dir, config=getattr(trainer, "config", None))
 
     def load_checkpoint(self, trainer: Trainer, path: str):
+        """Restore training state.  Runs on **all** processes in distributed mode."""
         if not os.path.exists(path):
             raise FileNotFoundError(f"{path} not found")
         log.info(f"Loading checkpoint from {path}...")
         checkpoint = torch.load(path, map_location=trainer.device, weights_only=False)
 
-        trainer.model.load_state_dict(checkpoint["model"])
+        self._unwrap_model(trainer).load_state_dict(checkpoint["model"])
         trainer.opt.load_state_dict(checkpoint["opt"])
         trainer.epoch = checkpoint["epoch"]
         trainer.step = checkpoint["step"]
@@ -148,8 +187,8 @@ class CheckpointHook(BaseHook):
             torch.cuda.set_rng_state(checkpoint["rng_cuda"].cpu())
         np.random.set_state(checkpoint["rng_numpy"])
 
-        if "scaler" in checkpoint and hasattr(trainer, "scaler"):
-            trainer.scaler.load_state_dict(checkpoint["scaler"])
+        if "scaler" in checkpoint and (scaler := self._get_scaler(trainer)) is not None:
+            scaler.load_state_dict(checkpoint["scaler"])
 
         if "scheduler" in checkpoint:
             from .optimization import LRSchedulerHook
