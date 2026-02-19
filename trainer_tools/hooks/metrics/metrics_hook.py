@@ -146,7 +146,7 @@ class MetricsHook(BaseHook):
         if self.use_tracker and trainer.is_main:
             self.tracker.finish()
 
-    def plot(self, axes=None, metrics=["loss"]):
+    def plot(self, axes=None, metrics=["loss"], show_epochs=False):
         self.history = load_metrics(self.history_file)
         all_roots = {k.replace("train_", "").replace("valid_", "") for cat in self.history for k in self.history[cat]}
         keys = sorted(all_roots) if metrics is None else [m for m in metrics if m in all_roots]
@@ -158,12 +158,19 @@ class MetricsHook(BaseHook):
             fig, axes = plt.subplots(len(keys), 1, figsize=(8, 4 * len(keys)))
         axes = np.atleast_1d(axes)
 
+        steps_per_epoch = getattr(self, "steps_per_epoch", None)
+
         for ax, root in zip(axes, keys):
             for cat in ["step", "epoch"]:
+                if cat == "epoch" and not show_epochs:
+                    continue
                 for pre in ["train_", "valid_", ""]:
                     full_key = f"{pre}{root}"
                     if full_key in self.history[cat]:
                         data = self.history[cat][full_key]
+                        if cat == "epoch" and steps_per_epoch is not None:
+                            data = data.copy()
+                            data[0] = (data[0] + 1) * steps_per_epoch
                         fmt = "o-" if "valid" in pre or cat == "epoch" else "-"
                         ax.plot(*data, fmt, label=f"{cat} {pre}{root}".strip())
 
@@ -171,7 +178,7 @@ class MetricsHook(BaseHook):
             ax.legend()
             ax.grid(True, alpha=0.3)
 
-        axes[-1].set_xlabel("Time (Step or Epoch)")
+        axes[-1].set_xlabel("Step")
         plt.tight_layout()
 
 
