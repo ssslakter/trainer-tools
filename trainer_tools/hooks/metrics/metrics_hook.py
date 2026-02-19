@@ -67,7 +67,7 @@ class MetricsHook(BaseHook):
             self.tracker, self.use_tracker = wandb, True
         elif t_type:
             log.warning(f"Tracker '{t_type}' not found.")
-        elif self.history_file:
+        elif self.history_file and self.history_file.is_file():
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             self.history_file.unlink(missing_ok=True)
 
@@ -94,7 +94,7 @@ class MetricsHook(BaseHook):
     def before_fit(self, trainer):
         dl = getattr(trainer, "dl", getattr(trainer, "train_dl"))
         self.steps_per_epoch = len(dl)
-        if self.use_tracker:
+        if self.use_tracker and trainer.is_main:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
     def before_epoch(self, trainer):
@@ -113,7 +113,7 @@ class MetricsHook(BaseHook):
     def after_step(self, trainer):
         self._run_metrics(trainer, "after_step")
         self.step_data["step"] = trainer.step
-        if trainer.training and trainer.step % self.freq == 0:
+        if trainer.training and trainer.step % self.freq == 0 and trainer.is_main:
             if self.use_tracker:
                 current_step = self.step_data.pop("step", trainer.step)
                 self.tracker.log(self.step_data, current_step)
@@ -126,11 +126,12 @@ class MetricsHook(BaseHook):
         self.epoch_data = epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
         val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
-        if self.use_tracker and val_stats:
-            self.tracker.log(val_stats, trainer.step)
-        elif val_stats:
-            with open(self.history_file, "a") as f:
-                f.write(json.dumps({"epoch": trainer.epoch, **epoch_means}) + "\n")
+        if trainer.is_main:
+            if self.use_tracker and val_stats:
+                self.tracker.log(val_stats, trainer.step)
+            elif val_stats:
+                with open(self.history_file, "a") as f:
+                    f.write(json.dumps({"epoch": trainer.epoch, **epoch_means}) + "\n")
 
         logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
 
@@ -138,10 +139,11 @@ class MetricsHook(BaseHook):
             if self.verbose or "loss" in k.lower():
                 logs.append(f"{k}: {epoch_means[k]:.4f}")
 
-        log.info(" | ".join(logs))
+        if trainer.is_main:
+            log.info(" | ".join(logs))
 
     def after_fit(self, trainer):
-        if self.use_tracker:
+        if self.use_tracker and trainer.is_main:
             self.tracker.finish()
 
     def plot(self, axes=None, metrics=["loss"]):

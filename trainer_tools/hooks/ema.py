@@ -16,8 +16,15 @@ class EMAHook(BaseHook):
         self.decay = decay
         self.ema_model = None
 
+    @staticmethod
+    def _unwrap(trainer: Trainer):
+        """Return the raw model, stripping any DDP/FSDP wrapper."""
+        if trainer.is_distributed:
+            return trainer.accelerator.unwrap_model(trainer.model)
+        return trainer.model
+
     def before_fit(self, trainer: Trainer):
-        self.ema_model = deepcopy(trainer.model)
+        self.ema_model = deepcopy(self._unwrap(trainer))
         self.ema_model.eval()
         for p in self.ema_model.parameters():
             p.requires_grad_(False)
@@ -28,8 +35,11 @@ class EMAHook(BaseHook):
             del trainer._ema_state_buffer
 
     def after_step(self, trainer: Trainer):
+        if not trainer.training:
+            return
+        model = self._unwrap(trainer)
         with t.no_grad():
-            for p_ema, p_model in zip(self.ema_model.parameters(), trainer.model.parameters()):
+            for p_ema, p_model in zip(self.ema_model.parameters(), model.parameters()):
                 p_ema.data.mul_(self.decay).add_(p_model.data, alpha=1 - self.decay)
 
     def before_valid(self, trainer: Trainer):
