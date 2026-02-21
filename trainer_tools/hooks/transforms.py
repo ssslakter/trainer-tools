@@ -15,18 +15,25 @@ class BatchTransformHook(BaseHook):
         batch_tfms: Union[list, Callable, None] = None,
         x_tfms_valid: Optional[Callable] = None,
         y_tfms_valid: Optional[Callable] = None,
+        batch_tfms_valid: Union[list, Callable, None] = None,
     ):
         """
         Args:
-            x_tfm (Callable, optional): Transformation to apply to inputs. Defaults to None.
-            y_tfm (Callable, optional): Transformation to apply to targets. Defaults to None.
-            batch_tfms (list or Callable, optional): List of batch transformations to apply. Defaults to None.
+            x_tfm (Callable, optional): Transformation to apply to inputs during training. Defaults to None.
+            y_tfm (Callable, optional): Transformation to apply to targets during training. Defaults to None.
+            batch_tfms (list or Callable, optional): Batch transformations to apply during training. Defaults to None.
+            x_tfms_valid (Callable, optional): Transformation to apply to inputs during validation. Defaults to None.
+            y_tfms_valid (Callable, optional): Transformation to apply to targets during validation. Defaults to None.
+            batch_tfms_valid (list or Callable, optional): Batch transformations to apply during validation. Defaults to None.
         """
         self.x_tfm, self.y_tfm = x_tfm, y_tfm
         self.x_tfms_valid, self.y_tfms_valid = x_tfms_valid, y_tfms_valid
         self.batch_tfms = batch_tfms or []
+        self.batch_tfms_valid = batch_tfms_valid or []
         if not isinstance(self.batch_tfms, list):
             self.batch_tfms = [self.batch_tfms]
+        if not isinstance(self.batch_tfms_valid, list):
+            self.batch_tfms_valid = [self.batch_tfms_valid]
 
     @torch.no_grad()
     def before_step(self, trainer: Trainer):
@@ -54,5 +61,6 @@ class BatchTransformHook(BaseHook):
         else:
             trainer.batch = xb
 
-        for tfm in self.batch_tfms:
+        active_batch_tfms = self.batch_tfms if trainer.training else self.batch_tfms_valid
+        for tfm in active_batch_tfms:
             trainer.batch = tfm(trainer.batch)
