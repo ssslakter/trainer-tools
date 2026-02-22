@@ -150,11 +150,12 @@ class Trainer:
                 self._one_epoch()
 
                 # Validation
-                self.model.eval()
-                self.training, self.dl = False, self.valid_dl
-                self._call_hook("before_valid")
-                with torch.no_grad():
-                    self._one_epoch()
+                if self.valid_dl is not None:
+                    self.model.eval()
+                    self.training, self.dl = False, self.valid_dl
+                    self._call_hook("before_valid")
+                    with torch.no_grad():
+                        self._one_epoch()
                 self._call_hook("after_epoch")
         except KeyboardInterrupt:
             self._call_hook("after_cancel")
