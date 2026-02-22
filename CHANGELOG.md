@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.1 (2026-02-22)
+
+### Patch
+
+- Make valid optional
+  ([`9822e5f`](https://github.com/ssslakter/trainer-tools/commit/9822e5f73bfadd415f28ac17316444e60d390bd3))
+
+
 ## v0.2.0 (2026-02-19)
 
 ### Features
