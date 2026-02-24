@@ -18,6 +18,12 @@ A lightweight, hook-based training loop for PyTorch. `trainer-tools` abstracts a
 
 ```bash
 pip install trainer-tools
+
+# With optional integrations
+pip install trainer-tools[wandb]      # Weights & Biases logging
+pip install trainer-tools[trackio]    # Trackio logging
+pip install trainer-tools[hydra]      # Hydra config management
+pip install trainer-tools[all]        # All optional dependencies
 ```
 
 ## Quick Start
