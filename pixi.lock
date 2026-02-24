@@ -6139,7 +6139,7 @@ packages:
 - pypi: ./
   name: trainer-tools
   version: 0.2.1
-  sha256: cfd3df6e88b45636cd6ccdae2f3d23bc31415e6ebd9f85ea98b1723bc5320549
+  sha256: 4119c596d9734728b9256d7045aed99980990856c0edcde0902bbd2eaaf800f5
   requires_dist:
   - torch>=2.2,<2.10
   - numpy

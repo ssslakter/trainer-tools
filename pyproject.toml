@@ -65,9 +65,9 @@ allow_zero_version = true
 major_on_zero = false
 
 [tool.semantic_release.commit_parser_options]
-allowed_tags = ["patch", "minor", "fix", "feat"]
+allowed_tags = ["patch", "minor", "fix", "feat", "release"]
 minor_tags = ["minor", "feat"]
-patch_tags = ["fix", "patch"]
+patch_tags = ["fix", "patch", "release"]
 default_bump_level = 0
 
 [dependency-groups]
