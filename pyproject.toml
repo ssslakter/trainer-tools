@@ -30,7 +30,8 @@ classifiers = [
 wandb = ["wandb"]
 trackio = ["trackio"]
 hydra = ["hydra-core"]
-all = ["wandb", "trackio", "hydra-core"]
+mlop = ["mlop"]
+all = ["wandb", "trackio", "hydra-core", "mlop"]
 
 
 [project.urls]
