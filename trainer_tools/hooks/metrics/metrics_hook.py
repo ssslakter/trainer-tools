@@ -98,7 +98,7 @@ class MetricsHook(BaseHook):
             return
         if t_type == "file":
             self.use_file = True
-            if self.log_file and self.log_file.is_file():
+            if self.log_file:
                 self.log_file.parent.mkdir(parents=True, exist_ok=True)
                 self.log_file.unlink(missing_ok=True)
             return

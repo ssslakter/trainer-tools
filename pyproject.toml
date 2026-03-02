@@ -57,6 +57,11 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:The pynvml package is deprecated:FutureWarning",
+]
+
 [tool.black]
 line-length = 120
 

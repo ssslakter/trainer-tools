@@ -27,7 +27,7 @@ def test_trainer_dict_dataloader(hf_model, dict_loaders, tmp_path):
     train_dl, valid_dl = dict_loaders
     opt = torch.optim.Adam(hf_model.parameters(), lr=0.01)
     hist_file = tmp_path / "metrics.jsonl"
-    metrics = MetricsHook(metrics=[Accuracy(), Loss()], history_file=hist_file, tracker_type='file')
+    metrics = MetricsHook(metrics=[Accuracy(), Loss()], log_file=hist_file, tracker_type='file')
 
     def loss_fn(preds, target):
         return torch.nn.functional.cross_entropy(preds["logits"], target)
