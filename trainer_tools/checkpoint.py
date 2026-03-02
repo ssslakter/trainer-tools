@@ -1,13 +1,20 @@
 from omegaconf import DictConfig, OmegaConf
-from hydra.utils import instantiate
 from .imports import *
 import logging
+import importlib
+
+def get_class(target_str):
+    """Retrieves a class object from a string dot-path."""
+    try:
+        module_path, class_name = target_str.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)
+    except (ImportError, AttributeError, ValueError) as e:
+        raise ImportError(f"Could not import {target_str}. Error: {e}")
+    
 
 log = logging.getLogger(__name__)
 
-
-def build_model_from_config(config: DictConfig) -> nn.Module:
-    return instantiate(config)
 
 
 def save_pretrained(model: nn.Module, save_dir: str, config: Optional[DictConfig] = None):
@@ -84,8 +91,8 @@ def load_from_pretrained(
             f"Cannot build model without config. No config.yaml found in {model_dir}. "
             "Use return_model=False to get state_dict only."
         )
-
-    model = build_model_from_config(config)
+    model_cls = config.get("__target__", config.get("class", ''))
+    model = get_class(model_cls)(**config)
     model.load_state_dict(state_dict)
 
     if device is not None:
