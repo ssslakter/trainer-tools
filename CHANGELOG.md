@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-03-02)
+
+### Bug Fixes
+
+- Remove hydra from checkpoint
+  ([`20198b4`](https://github.com/ssslakter/trainer-tools/commit/20198b49d1ab12f5c0803f171e7ba43d18af3509))
+
+- Return omegaconf
+  ([`3a88cd1`](https://github.com/ssslakter/trainer-tools/commit/3a88cd126fc71abddb504f5e71103fedf3f47158))
+
+### Features
+
+- Add mlop
+  ([`dfae021`](https://github.com/ssslakter/trainer-tools/commit/dfae0216da4333577bd2f6e5101ddad0a910e9fe))
+
+
 ## v0.2.1 (2026-02-22)
 
 ### Patch
