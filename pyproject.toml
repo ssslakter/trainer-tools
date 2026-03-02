@@ -9,6 +9,7 @@ dependencies = [
     "matplotlib",
     "tqdm",
     "accelerate>=1.12.0,<2",
+    "omegaconf"
 ]
 name = "trainer-tools"
 readme = "README.md"
