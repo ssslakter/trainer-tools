@@ -30,7 +30,7 @@ def test_mse_metric_adequacy(tmp_path):
     with torch.no_grad():
         model.weight.fill_(3.0)
     log_file = "metrics.jsonl"
-    metrics_hook = MetricsHook(metrics=[Loss()], history_file=log_file)
+    metrics_hook = MetricsHook(metrics=[Loss()], history_file=log_file, tracker_type='file')
 
     trainer = Trainer(
         model=model,
