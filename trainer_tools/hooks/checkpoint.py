@@ -137,10 +137,21 @@ class CheckpointHook(BaseHook):
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
     def after_step(self, trainer: Trainer):
-        if not (trainer.training and trainer.step > 0 and trainer.step % self.every == 0):
+        if trainer.is_distributed:
+            check_freq, index = False, None
+            for i in range(trainer.accelerator.num_processes):
+                step = trainer.step + i
+                if step % self.every == 0:
+                    check_freq = True
+                    break
+        else:
+            check_freq = trainer.step % self.every == 0
+            step = trainer.step
+
+        if not (trainer.training and trainer.step > 0 and check_freq):
             return
 
-        self._save(trainer, f"checkpoint_step_{trainer.step}.pt", is_best=False)
+        self._save(trainer, f"checkpoint_step_{step}.pt", is_best=False)
 
         if self.save_strategy == "best":
             metrics_hook = trainer.get_hook(MetricsHook, None)
@@ -153,7 +164,7 @@ class CheckpointHook(BaseHook):
             current_metric = stats[self.metric]
             if current_metric < self._best_metric:
                 self._best_metric = current_metric
-                self._save(trainer, f"checkpoint_best_step_{trainer.step}.pt", is_best=True)
+                self._save(trainer, f"checkpoint_best_step_{step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt", sync=False)

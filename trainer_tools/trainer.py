@@ -124,7 +124,7 @@ class Trainer:
             if not self.skip_zero_grad: self.opt.zero_grad()
         self._call_hook("after_step")
         if self.model.training:
-            self.step += 1
+            self.step += self.accelerator.num_processes if self.is_distributed else 1
 
         self.loss_t = self.preds = None
         self.skip_opt_step = self.skip_zero_grad = False
@@ -138,7 +138,9 @@ class Trainer:
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""
         self.n_steps = len(self.train_dl) * self.epochs
-        self.step = self.start_epoch = 0
+        if self.is_distributed:
+            self.n_steps *= self.accelerator.num_processes
+        self.step = self.start_epoch = 0 if not self.is_distributed else self.accelerator.process_index
         self._call_hook("before_fit")
         self.model.to(self.device)
         try:
