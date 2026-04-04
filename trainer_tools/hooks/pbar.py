@@ -15,20 +15,20 @@ class ProgressBarHook(MainProcessHook):
         self.epoch_bar = tqdm(
             range(trainer.epochs),
             desc="Epoch",
-            initial=trainer.state.epoch,
+            initial=trainer.step_state.epoch,
             total=trainer.epochs,
         )
 
     def before_epoch(self, trainer):
         self._init_pbar(
             trainer,
-            desc=f"Epoch {trainer.state.epoch + 1}/{trainer.epochs} [Train]",
-            initial=trainer.state.batch_idx,
+            desc=f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs} [Train]",
+            initial=trainer.step_state.batch_idx,
         )
 
     def before_valid(self, trainer):
         self.bar.close()
-        self._init_pbar(trainer, desc=f"Epoch {trainer.state.epoch + 1}/{trainer.epochs} [Valid]")
+        self._init_pbar(trainer, desc=f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs} [Valid]")
 
     def _init_pbar(self, trainer, desc, initial=0):
         total = len(trainer.dl)

@@ -16,7 +16,7 @@ def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path, simple_train_s
             self.step, self.epoch = step, epoch
 
         def after_step(self, trainer):
-            if trainer.state.optimizer_step >= self.step and trainer.state.epoch >= self.epoch:
+            if trainer.step_state.optimizer_step >= self.step and trainer.step_state.epoch >= self.epoch:
                 raise KeyboardInterrupt()
 
     trainer_1 = Trainer(
@@ -43,8 +43,8 @@ def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path, simple_train_s
         """Checks state immediately after loading, before training moves on."""
 
         def before_fit(self, trainer):
-            assert trainer.state.epoch == 2
-            assert trainer.state.optimizer_step == 10
+            assert trainer.step_state.epoch == 2
+            assert trainer.step_state.optimizer_step == 10
             w1 = simple_model.net.weight.detach()
             w2 = trainer.model.net.weight.detach()
             assert torch.equal(w1, w2)

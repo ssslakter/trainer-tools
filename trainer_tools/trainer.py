@@ -18,9 +18,8 @@ class StepState:
     epoch: int = 0
     grad_accum_steps: int = 1
     num_processes: int = 1
-    output: dict = field(default_factory=dict)
 
-    def should_step_optimizer(self, is_last_batch: bool = False) -> bool:
+    def is_grad_accum_boundary(self, is_last_batch: bool = False) -> bool:
         return (self.batch_idx + 1) % self.grad_accum_steps == 0 or is_last_batch
 
     def increment_batch(self, batch_size: int, is_training: bool = True, did_optimizer_step: bool = False):
@@ -75,7 +74,9 @@ class Trainer:
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
         self.accelerator: Accelerator = None
-        self.state = StepState()
+        self.step_state = StepState()
+        self.state = {}
+        self.result = {}
 
     @property
     def is_main(self):
@@ -97,8 +98,8 @@ class Trainer:
 
     def do_backward(self):
         """Performs backward pass. Can be replaced by hooks or subclasses."""
-        if "loss" in self.state.output:
-            self.state.output["loss"].backward()
+        if "loss" in self.result:
+            self.result["loss"].backward()
 
     def do_opt_step(self) -> bool:
         """
@@ -123,7 +124,7 @@ class Trainer:
 
         if not isinstance(output, dict):
             raise TypeError(f"The step function must return a dictionary, but got {type(output).__name__}.")
-        self.state.output = output
+        self.result = output
 
         if "loss" in output:
             self.loss = output["loss"].item()
@@ -147,10 +148,10 @@ class Trainer:
         # Update state after the step
         if self.model.training:
             batch_size = self._get_batch_size(self.batch)
-            self.state.increment_batch(batch_size, is_training=True, did_optimizer_step=self._did_opt_step)
+            self.step_state.increment_batch(batch_size, is_training=True, did_optimizer_step=self._did_opt_step)
 
         self.batch = None
-        self.state.output = {}
+        self.result = {}
 
     def _get_batch_size(self, batch) -> int:
         """Extract batch size from batch for state tracking."""
@@ -168,7 +169,7 @@ class Trainer:
 
     def _one_epoch(self):
         """Run single epoch"""
-        self.state.reset_epoch()
+        self.step_state.reset_epoch()
         for _, self.batch in enumerate(self.dl):
             self._one_batch()
         self.batch = None
@@ -176,14 +177,14 @@ class Trainer:
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""
         # Initialize state
-        self.state.num_processes = self.accelerator.num_processes if self.is_distributed else 1
+        self.step_state.num_processes = self.accelerator.num_processes if self.is_distributed else 1
         self.start_epoch = 0
 
         self._call_hook("before_fit")
         self.model.to(self.device)
         try:
             for epoch_idx in range(self.start_epoch, self.epochs):
-                self.state.epoch = epoch_idx
+                self.step_state.epoch = epoch_idx
 
                 # Train
                 self.model.train()

@@ -35,7 +35,7 @@ class CancelAtStepHook(BaseHook):
         self._step, self._epoch = step, epoch
 
     def after_step(self, trainer):
-        if trainer.state.optimizer_step >= self._step and trainer.state.epoch >= self._epoch:
+        if trainer.step_state.optimizer_step >= self._step and trainer.step_state.epoch >= self._epoch:
             raise KeyboardInterrupt("CancelAtStepHook")
 
 
@@ -69,8 +69,8 @@ def test_accelerate_basic_training(simple_model, tuple_loaders, simple_train_ste
     )
     trainer.fit()
 
-    assert trainer.state.optimizer_step > 0
-    assert trainer.state.epoch == 1  # 0-indexed, finished epoch index
+    assert trainer.step_state.optimizer_step > 0
+    assert trainer.step_state.epoch == 1  # 0-indexed, finished epoch index
 
 
 def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_path, simple_train_step):
@@ -113,8 +113,8 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
         ord = 200
 
         def before_fit(self, trainer):
-            assert trainer.state.epoch == 2
-            assert trainer.state.optimizer_step == 10
+            assert trainer.step_state.epoch == 2
+            assert trainer.step_state.optimizer_step == 10
             unwrapped = trainer.accelerator.unwrap_model(trainer.model)
             for k, v in unwrapped.state_dict().items():
                 assert torch.equal(v, weights_before[k]), f"Mismatch in {k}"

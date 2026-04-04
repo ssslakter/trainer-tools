@@ -28,16 +28,16 @@ class Metric(ABC):
     def should_run(self, trainer) -> bool:
         if not trainer.training:
             return True
-        return trainer.state.optimizer_step % self.freq == 0
+        return trainer.step_state.optimizer_step % self.freq == 0
 
     def get_value(self, trainer, key, fn=None):
-        """Helper to extract a value from state.output or compute it via fn."""
+        """Helper to extract a value from trainer.result or compute it via fn."""
         if fn is not None:
-            return fn(trainer.state)
-        if key not in trainer.state.output:
+            return fn(trainer)
+        if key not in trainer.result:
             cb = "train_step" if trainer.model.training else "eval_step"
             raise KeyError(f"Metric requested key '{key}' but it was not returned by {cb}.")
-        return trainer.state.output[key]
+        return trainer.result[key]
 
     @abstractmethod
     def __call__(self, trainer) -> dict:
@@ -70,7 +70,7 @@ class Accuracy(Metric):
 
     def __call__(self, trainer: Trainer):
         if self.pred_fn is not None:
-            preds = self.pred_fn(trainer.state)
+            preds = self.pred_fn(trainer)
         else:
             logits = self.get_value(trainer, self.pred_key)
             preds = logits.argmax(dim=-1) if logits.ndim > 1 else (logits > 0.5)

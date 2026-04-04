@@ -46,6 +46,8 @@ class AMPHook(BaseHook):
     - Wraps backward and optimizer step with gradient scaling.
     """
 
+    ord = -200  # Must run very early so its replacements are wrapped by others
+
     def __init__(self, enabled=True, dtype=torch.float16, device_type="cuda"):
         self.enabled, self.dtype, self.device_type = enabled, dtype, device_type
 
@@ -76,12 +78,12 @@ class AMPHook(BaseHook):
         trainer.eval_step = amp_eval_step
 
         def amp_backward():
-            if "loss" in trainer.state.output:
-                scaled_loss = trainer.scaler.scale(trainer.state.output["loss"])
+            if "loss" in trainer.result:
+                scaled_loss = trainer.scaler.scale(trainer.result["loss"])
                 scaled_loss.backward()
 
         def amp_opt_step():
-            loss = trainer.state.output.get("loss", 1)
+            loss = trainer.result.get("loss", 1)
             if loss != 0:
                 trainer.scaler.step(trainer.opt)
                 trainer.scaler.update()
@@ -101,19 +103,22 @@ class EmptyCudaCacheHook(BaseHook):
 class GradClipHook(BaseHook):
     """Hook to clip gradients after backward pass."""
 
-    ord = -5  # Run after backward but before opt step
+    ord = -5
 
     def __init__(self, max_norm=1.0):
         self.max_norm = max_norm
 
-    def after_backward(self, trainer: Trainer):
-        if not trainer.training:
-            return
+    def before_fit(self, trainer: Trainer):
+        original_opt_step = trainer.do_opt_step
 
-        # Unscale gradients if using AMP
-        if trainer.get_hook(AMPHook, None) and hasattr(trainer, "scaler") and trainer.scaler.is_enabled():
-            trainer.scaler.unscale_(trainer.opt)
-        nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
+        def clip_opt_step():
+            # Before optimizer step, unscale and clip if we are stepping
+            if trainer.get_hook(AMPHook, None) and hasattr(trainer, "scaler") and trainer.scaler.is_enabled():
+                trainer.scaler.unscale_(trainer.opt)
+            nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
+            return original_opt_step()
+
+        trainer.do_opt_step = clip_opt_step
 
 
 class GradientAccumulationHook(BaseHook):
@@ -128,26 +133,26 @@ class GradientAccumulationHook(BaseHook):
 
     def before_fit(self, trainer):
         """Configure StepState and wrap optimizer operations."""
-        trainer.state.grad_accum_steps = self.steps
+        trainer.step_state.grad_accum_steps = self.steps
 
         original_backward = trainer.do_backward
         original_opt_step = trainer.do_opt_step
         original_zero_grad = trainer.do_zero_grad
 
         def grad_accum_backward():
-            if "loss" in trainer.state.output:
-                trainer.state.output["loss"] = trainer.state.output["loss"] / self.steps
+            if "loss" in trainer.result:
+                trainer.result["loss"] = trainer.result["loss"] / self.steps
             original_backward()
 
         def grad_accum_opt_step():
-            is_last_batch = (trainer.state.batch_idx + 1) >= len(trainer.dl)
-            if trainer.state.should_step_optimizer(is_last_batch):
+            is_last_batch = (trainer.step_state.batch_idx + 1) >= len(trainer.dl)
+            if trainer.step_state.is_grad_accum_boundary(is_last_batch):
                 return original_opt_step()
             return False  # Skipped
 
         def grad_accum_zero_grad():
-            is_last_batch = (trainer.state.batch_idx + 1) >= len(trainer.dl)
-            if trainer.state.should_step_optimizer(is_last_batch):
+            is_last_batch = (trainer.step_state.batch_idx + 1) >= len(trainer.dl)
+            if trainer.step_state.is_grad_accum_boundary(is_last_batch):
                 original_zero_grad()
 
         trainer.do_backward = grad_accum_backward

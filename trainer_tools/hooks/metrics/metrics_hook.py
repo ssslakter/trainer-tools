@@ -151,27 +151,33 @@ class MetricsHook(MainProcessHook):
 
     def after_step(self, trainer):
         self._run_metrics(trainer, "after_step")
-        self.step_data["step"] = trainer.state.samples_seen
-        if trainer.training and trainer.state.optimizer_step % self.freq == 0:
-            if self.use_tracker:
-                current_step = self.step_data.pop("step", trainer.state.samples_seen)
-                self.tracker.log(self.step_data, current_step)
-            elif self.use_file:
-                with open(self.log_file, "a") as f:
-                    f.write(json.dumps(self.step_data) + "\n")
-        self.step_data.clear()
+        if not trainer.training:
+            self.step_data.clear()
+            return
+
+        self.step_data["step"] = trainer.step_state.samples_seen
+        if getattr(trainer, "_did_opt_step", False):
+            # optimizer_step not yet incremented in step_state, so we add 1 for freq check
+            if (trainer.step_state.optimizer_step + 1) % self.freq == 0:
+                if self.use_tracker:
+                    current_step = self.step_data.pop("step", trainer.step_state.samples_seen)
+                    self.tracker.log(self.step_data, current_step)
+                elif self.use_file:
+                    with open(self.log_file, "a") as f:
+                        f.write(json.dumps(self.step_data) + "\n")
+            self.step_data.clear()
 
     def after_epoch(self, trainer):
         self.epoch_data = epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
         val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
         if self.use_tracker and val_stats:
-            self.tracker.log(val_stats, trainer.state.samples_seen)
+            self.tracker.log(val_stats, trainer.step_state.samples_seen)
         elif self.use_file and val_stats:
             with open(self.log_file, "a") as f:
-                f.write(json.dumps({"epoch": trainer.state.epoch, **epoch_means}) + "\n")
+                f.write(json.dumps({"epoch": trainer.step_state.epoch, **epoch_means}) + "\n")
 
-        logs = [f"Epoch {trainer.state.epoch + 1}/{trainer.epochs}"]
+        logs = [f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs}"]
 
         for k in sorted(epoch_means.keys()):
             if self.verbose or "loss" in k.lower():

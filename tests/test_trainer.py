@@ -20,7 +20,7 @@ def test_trainer_tuple_dataloader(simple_model, tuple_loaders, simple_train_step
 
     trainer.fit()
 
-    assert trainer.state.optimizer_step > 0
+    assert trainer.step_state.optimizer_step > 0
 
 
 def test_trainer_dict_dataloader(hf_model, dict_loaders, tmp_path, hf_train_step):

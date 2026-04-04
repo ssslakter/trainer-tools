@@ -87,9 +87,9 @@ class CheckpointHook(MainProcessHook):
         state = {
             "model": self._unwrap_model(trainer).state_dict(),
             "opt": trainer.opt.state_dict(),
-            "epoch": trainer.state.epoch,
-            "optimizer_step": trainer.state.optimizer_step,
-            "samples_seen": trainer.state.samples_seen,
+            "epoch": trainer.step_state.epoch,
+            "optimizer_step": trainer.step_state.optimizer_step,
+            "samples_seen": trainer.step_state.samples_seen,
             "rng_torch": torch.get_rng_state(),
             "rng_numpy": np.random.get_state(),
         }
@@ -132,20 +132,20 @@ class CheckpointHook(MainProcessHook):
         if Path(self.resume_path).exists():
             self.load_checkpoint(trainer, self.resume_path)
             log.info(
-                f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.state.optimizer_step}"
+                f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.step_state.optimizer_step}"
             )
         else:
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
     def after_step(self, trainer: Trainer):
-        if not (trainer.training and trainer.state.optimizer_step > 0):
+        if not (trainer.training and trainer.step_state.optimizer_step > 0):
             return
 
-        check_freq = trainer.state.optimizer_step % self.every == 0
+        check_freq = trainer.step_state.optimizer_step % self.every == 0
         if not check_freq:
             return
 
-        self._save(trainer, f"checkpoint_step_{trainer.state.optimizer_step}.pt", is_best=False)
+        self._save(trainer, f"checkpoint_step_{trainer.step_state.optimizer_step}.pt", is_best=False)
 
         if self.save_strategy == "best":
             metrics_hook = trainer.get_hook(MetricsHook, None)
@@ -158,7 +158,7 @@ class CheckpointHook(MainProcessHook):
             current_metric = stats[self.metric]
             if current_metric < self._best_metric:
                 self._best_metric = current_metric
-                self._save(trainer, f"checkpoint_best_step_{trainer.state.optimizer_step}.pt", is_best=True)
+                self._save(trainer, f"checkpoint_best_step_{trainer.step_state.optimizer_step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt", sync=False)
@@ -182,9 +182,11 @@ class CheckpointHook(MainProcessHook):
 
         self._unwrap_model(trainer).load_state_dict(checkpoint["model"])
         trainer.opt.load_state_dict(checkpoint["opt"])
-        trainer.state.epoch = checkpoint.get("epoch", 0)
-        trainer.state.optimizer_step = checkpoint.get("optimizer_step", checkpoint.get("step", 0))  # Backward compat
-        trainer.state.samples_seen = checkpoint.get("samples_seen", 0)
+        trainer.step_state.epoch = checkpoint.get("epoch", 0)
+        trainer.step_state.optimizer_step = checkpoint.get(
+            "optimizer_step", checkpoint.get("step", 0)
+        )  # Backward compat
+        trainer.step_state.samples_seen = checkpoint.get("samples_seen", 0)
 
         torch.set_rng_state(checkpoint["rng_torch"].cpu())
         if torch.cuda.is_available() and "rng_cuda" in checkpoint:
@@ -203,4 +205,4 @@ class CheckpointHook(MainProcessHook):
                 log.warning("Checkpoint has scheduler state but no LRSchedulerHook found.")
         if "ema" in checkpoint:
             trainer._ema_state_buffer = checkpoint["ema"]
-        log.info(f"Resumed at Epoch {trainer.state.epoch}, OptimizerStep {trainer.state.optimizer_step}")
+        log.info(f"Resumed at Epoch {trainer.step_state.epoch}, OptimizerStep {trainer.step_state.optimizer_step}")
