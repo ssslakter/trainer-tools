@@ -33,38 +33,39 @@ y = torch.randint(0, 2, (100,))
 ds = TensorDataset(x, y)
 dl = DataLoader(ds, batch_size=32)
 
-# 2. Define Model
+# 2. Define Model and Optimizer
 model = nn.Sequential(nn.Linear(10, 2))
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-# 3. Setup Hooks
-metrics = MetricsHook(metrics=[Accuracy(), Loss()])
+# 3. Define the Training Step
+def train_step(batch, trainer):
+    inputs, labels = batch
+    logits = trainer.model(inputs)
+    loss = nn.CrossEntropyLoss()(logits, labels)
+    
+    # Must return a dictionary containing at least the "loss" key!
+    return {
+        "loss": loss,
+        "logits": logits,
+        "labels": labels
+    }
+
+# 4. Setup Hooks
+# Metrics use the dictionary keys returned in train_step
+metrics = MetricsHook(metrics=[Accuracy(pred_key="logits", target_key="labels"), Loss()])
 pbar = ProgressBarHook()
 
-# 4. Train
+# 5. Train
 trainer = Trainer(
     model=model,
     train_dl=dl,
     valid_dl=dl,
     optim=optimizer,
-    loss_func=nn.CrossEntropyLoss(),
+    train_step=train_step,
     epochs=5,
     hooks=[metrics, pbar],
     device="cuda" if torch.cuda.is_available() else "cpu"
 )
 
 trainer.fit()
-```
-
-## The Hook System
-
-`trainer-tools` relies on `BaseHook`. You can create custom behavior by subclassing it:
-
-```py
-from trainer_tools.hooks import BaseHook
-
-class MyCustomHook(BaseHook):
-    def after_step(self, trainer):
-        if trainer.step % 100 == 0:
-            print(f"Current Loss: {trainer.loss}")
 ```

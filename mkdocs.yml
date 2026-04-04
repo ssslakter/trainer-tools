@@ -42,8 +42,12 @@ plugins:
 
 nav:
   - Home: index.md
+  - Guides:
+    - Train and Eval Steps: guides/train_eval.md
+    - Tracking Metrics: guides/tracking_metrics.md
+    - Writing Custom Hooks: guides/custom_hooks.md
   - API Reference:
     - Trainer: reference/trainer.md
     - Hooks:
-      - Hooks Basics: reference/hooks.md
+      - Built-in Hooks: reference/hooks_builtin.md
       - Metrics: reference/hooks_metrics.md
