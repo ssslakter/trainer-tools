@@ -131,14 +131,16 @@ class CheckpointHook(MainProcessHook):
             return
         if Path(self.resume_path).exists():
             self.load_checkpoint(trainer, self.resume_path)
-            log.info(f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.state.optimizer_step}")
+            log.info(
+                f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.state.optimizer_step}"
+            )
         else:
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
     def after_step(self, trainer: Trainer):
         if not (trainer.training and trainer.state.optimizer_step > 0):
             return
-            
+
         check_freq = trainer.state.optimizer_step % self.every == 0
         if not check_freq:
             return

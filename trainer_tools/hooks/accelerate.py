@@ -1,4 +1,6 @@
 import logging
+from typing import Any
+
 from accelerate import Accelerator
 from ..trainer import Trainer
 from .base import BaseHook
@@ -35,7 +37,7 @@ class AccelerateHook(BaseHook):
         self,
         gradient_accumulation_steps: int = 1,
         max_grad_norm: float | None = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         self.accelerator = Accelerator(
             gradient_accumulation_steps=gradient_accumulation_steps,
@@ -55,10 +57,8 @@ class AccelerateHook(BaseHook):
         trainer.accelerator = self.accelerator
         trainer.device = self.accelerator.device
 
-        trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl = (
-            self.accelerator.prepare(
-                trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl
-            )
+        trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl = self.accelerator.prepare(
+            trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl
         )
 
         if hook := trainer.get_hook(LRSchedulerHook, None):
@@ -68,18 +68,16 @@ class AccelerateHook(BaseHook):
         def accelerate_backward():
             if trainer.loss_t is not None:
                 self.accelerator.backward(trainer.loss_t)
-        
+
         trainer.do_backward = accelerate_backward
 
         log.info(
-            "AccelerateHook initialised — device: %s, mixed-precision: %s, "
-            "grad-accum steps: %s, distributed: %s",
+            "AccelerateHook initialised — device: %s, mixed-precision: %s, grad-accum steps: %s, distributed: %s",
             self.accelerator.device,
             self.accelerator.mixed_precision,
             self.accelerator.gradient_accumulation_steps,
             self.accelerator.distributed_type,
         )
-
 
     def before_step(self, trainer: Trainer):
         if trainer.training:
@@ -88,9 +86,7 @@ class AccelerateHook(BaseHook):
 
     def after_backward(self, trainer: Trainer):
         if self.max_grad_norm and self.accelerator.sync_gradients:
-            self.accelerator.clip_grad_norm_(
-                trainer.model.parameters(), self.max_grad_norm
-            )
+            self.accelerator.clip_grad_norm_(trainer.model.parameters(), self.max_grad_norm)
 
     def after_step(self, trainer: Trainer):
         if trainer.training and self._accumulate_ctx is not None:

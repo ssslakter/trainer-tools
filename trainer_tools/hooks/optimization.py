@@ -1,6 +1,7 @@
 import logging
 from ..trainer import Trainer
 from ..imports import *
+
 try:
     from torch.amp import GradScaler, autocast
 except ImportError:
@@ -37,7 +38,6 @@ class LRSchedulerHook(BaseHook):
             self.sched.step()
 
 
-
 class AMPHook(BaseHook):
     """
     A hook to seamlessly add Automatic Mixed Precision (AMP).
@@ -56,30 +56,30 @@ class AMPHook(BaseHook):
         trainer.scaler = GradScaler(enabled=use_scaler)
         trainer.autocast = autocast(self.device_type, enabled=self.enabled, dtype=self.dtype)
         log.info(f"Mixed Precision Training: {'Enabled' if self.enabled else 'Disabled'}")
-        
+
         # Wrap operations
         original_backward = trainer.do_backward
         original_opt_step = trainer.do_opt_step
-        
+
         original_train_step = trainer.train_step
         original_eval_step = trainer.eval_step
-        
+
         def amp_train_step(batch, t):
             with trainer.autocast:
                 return original_train_step(batch, t)
-                
+
         def amp_eval_step(batch, t):
             with trainer.autocast:
                 return original_eval_step(batch, t)
-                
+
         trainer.train_step = amp_train_step
         trainer.eval_step = amp_eval_step
-        
+
         def amp_backward():
             if "loss" in trainer.state.output:
                 scaled_loss = trainer.scaler.scale(trainer.state.output["loss"])
                 scaled_loss.backward()
-        
+
         def amp_opt_step():
             loss = trainer.state.output.get("loss", 1)
             if loss != 0:
@@ -87,10 +87,9 @@ class AMPHook(BaseHook):
                 trainer.scaler.update()
                 return True
             return False
-        
+
         trainer.do_backward = amp_backward
         trainer.do_opt_step = amp_opt_step
-
 
 
 class EmptyCudaCacheHook(BaseHook):
@@ -101,6 +100,7 @@ class EmptyCudaCacheHook(BaseHook):
 
 class GradClipHook(BaseHook):
     """Hook to clip gradients after backward pass."""
+
     ord = -5  # Run after backward but before opt step
 
     def __init__(self, max_norm=1.0):
@@ -109,11 +109,12 @@ class GradClipHook(BaseHook):
     def after_backward(self, trainer: Trainer):
         if not trainer.training:
             return
-            
+
         # Unscale gradients if using AMP
-        if trainer.get_hook(AMPHook, None) and hasattr(trainer, 'scaler') and trainer.scaler.is_enabled():
+        if trainer.get_hook(AMPHook, None) and hasattr(trainer, "scaler") and trainer.scaler.is_enabled():
             trainer.scaler.unscale_(trainer.opt)
         nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_norm)
+
 
 class GradientAccumulationHook(BaseHook):
     """
@@ -124,31 +125,31 @@ class GradientAccumulationHook(BaseHook):
 
     def __init__(self, steps: int = 1):
         self.steps = steps
-    
+
     def before_fit(self, trainer):
         """Configure StepState and wrap optimizer operations."""
         trainer.state.grad_accum_steps = self.steps
-        
+
         original_backward = trainer.do_backward
         original_opt_step = trainer.do_opt_step
         original_zero_grad = trainer.do_zero_grad
-        
+
         def grad_accum_backward():
             if "loss" in trainer.state.output:
                 trainer.state.output["loss"] = trainer.state.output["loss"] / self.steps
             original_backward()
-                
+
         def grad_accum_opt_step():
             is_last_batch = (trainer.state.batch_idx + 1) >= len(trainer.dl)
             if trainer.state.should_step_optimizer(is_last_batch):
                 return original_opt_step()
             return False  # Skipped
-        
+
         def grad_accum_zero_grad():
             is_last_batch = (trainer.state.batch_idx + 1) >= len(trainer.dl)
             if trainer.state.should_step_optimizer(is_last_batch):
                 original_zero_grad()
-        
+
         trainer.do_backward = grad_accum_backward
         trainer.do_opt_step = grad_accum_opt_step
         trainer.do_zero_grad = grad_accum_zero_grad

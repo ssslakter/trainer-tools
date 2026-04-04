@@ -11,9 +11,10 @@ RAISE = object()
 @dataclass
 class StepState:
     """Centralized step/batch/sample counting, invariant to num_processes and grad accumulation."""
-    batch_idx: int = 0        # within current epoch
-    optimizer_step: int = 0   # increments after opt.step()
-    samples_seen: int = 0     # global across all processes, use as log x-axis
+
+    batch_idx: int = 0  # within current epoch
+    optimizer_step: int = 0  # increments after opt.step()
+    samples_seen: int = 0  # global across all processes, use as log x-axis
     epoch: int = 0
     grad_accum_steps: int = 1
     num_processes: int = 1
@@ -31,6 +32,7 @@ class StepState:
 
     def reset_epoch(self):
         self.batch_idx = 0
+
 
 class Trainer:
     """
@@ -62,7 +64,13 @@ class Trainer:
         device=default_device,
         config=None,
     ):
-        self.model, self.train_step, self.train_dl, self.valid_dl, self.opt = model, train_step, train_dl, valid_dl, optim
+        self.model, self.train_step, self.train_dl, self.valid_dl, self.opt = (
+            model,
+            train_step,
+            train_dl,
+            valid_dl,
+            optim,
+        )
         self.eval_step = eval_step or train_step
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
@@ -79,6 +87,7 @@ class Trainer:
 
     def _call_hook(self, method_name):
         from .hooks.base import MainProcessHook
+
         sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
         for hook in sorted_hooks:
             # Skip MainProcessHook instances on non-main processes
@@ -90,7 +99,7 @@ class Trainer:
         """Performs backward pass. Can be replaced by hooks or subclasses."""
         if "loss" in self.state.output:
             self.state.output["loss"].backward()
-    
+
     def do_opt_step(self) -> bool:
         """
         Performs optimizer step. Can be replaced by hooks or subclasses.
@@ -98,7 +107,7 @@ class Trainer:
         """
         self.opt.step()
         return True
-    
+
     def do_zero_grad(self):
         """Zeros gradients. Can be replaced by hooks or subclasses."""
         self.opt.zero_grad()
@@ -111,7 +120,7 @@ class Trainer:
 
         step_func = self.train_step if self.model.training else self.eval_step
         output = step_func(self.batch, self)
-        
+
         if not isinstance(output, dict):
             raise TypeError(f"The step function must return a dictionary, but got {type(output).__name__}.")
         self.state.output = output
@@ -122,19 +131,19 @@ class Trainer:
         else:
             self.loss = None
             self.loss_t = None
-        
+
         if self.model.training:
             self.do_backward()
             self._call_hook("after_backward")
-            
+
             # Step optimizer and track whether it actually stepped
             self._did_opt_step = self.do_opt_step()
             self.do_zero_grad()
         else:
             self._did_opt_step = False
-            
+
         self._call_hook("after_step")
-        
+
         # Update state after the step
         if self.model.training:
             batch_size = self._get_batch_size(self.batch)
@@ -142,7 +151,7 @@ class Trainer:
 
         self.batch = None
         self.state.output = {}
-    
+
     def _get_batch_size(self, batch) -> int:
         """Extract batch size from batch for state tracking."""
         if isinstance(batch, (list, tuple)):
@@ -169,13 +178,13 @@ class Trainer:
         # Initialize state
         self.state.num_processes = self.accelerator.num_processes if self.is_distributed else 1
         self.start_epoch = 0
-        
+
         self._call_hook("before_fit")
         self.model.to(self.device)
         try:
             for epoch_idx in range(self.start_epoch, self.epochs):
                 self.state.epoch = epoch_idx
-                
+
                 # Train
                 self.model.train()
                 self.training, self.dl = True, self.train_dl
@@ -202,20 +211,28 @@ class Trainer:
         if default is not RAISE:
             return default
         raise KeyError(f"Hook {cls} not found")
-        
+
     def describe_hooks(self):
         """Prints a Markdown table of hooks to tell you what runs when and in what order."""
-        from .hooks.base import BaseHook # local import
+        from .hooks.base import BaseHook  # local import
+
         points = [
-            "before_fit", "before_epoch", "before_step",
-            "after_pred", "after_loss", "after_backward",
-            "after_step", "before_valid", "after_epoch",
-            "after_fit", "after_cancel"
+            "before_fit",
+            "before_epoch",
+            "before_step",
+            "after_pred",
+            "after_loss",
+            "after_backward",
+            "after_step",
+            "before_valid",
+            "after_epoch",
+            "after_fit",
+            "after_cancel",
         ]
-        
+
         sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
         lines = ["| Lifecycle Point | Hook | Order |", "| --------------- | ---- | ----- |"]
-        
+
         for point in points:
             active_hooks = []
             for h in sorted_hooks:
@@ -224,7 +241,7 @@ class Trainer:
                 is_dynamic = point in getattr(h, "callbacks", {})
                 if cls_method is not base_method or is_dynamic:
                     active_hooks.append(h)
-                            
+
             if not active_hooks:
                 lines.append(f"| {point} | (none) | |")
             for i, h in enumerate(active_hooks):
@@ -232,5 +249,5 @@ class Trainer:
                 order = getattr(h, "ord", 0)
                 point_str = point if i == 0 else ""
                 lines.append(f"| {point_str} | {name} | {order} |")
-        
+
         print("\n".join(lines))

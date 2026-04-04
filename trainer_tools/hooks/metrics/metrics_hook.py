@@ -1,3 +1,4 @@
+from typing import Any
 import logging, json
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
@@ -48,7 +49,7 @@ class MetricsHook(MainProcessHook):
         log_file: Optional[str] = "metrics.jsonl",
         name: str = None,
         project: str = None,
-        **tracker_kwargs,
+        **tracker_kwargs: Any,
     ):
         """Aggregates Metric outputs and logs them to the console and/or a tracker.
 
@@ -170,7 +171,7 @@ class MetricsHook(MainProcessHook):
             with open(self.log_file, "a") as f:
                 f.write(json.dumps({"epoch": trainer.state.epoch, **epoch_means}) + "\n")
 
-        logs = [f"Epoch {trainer.state.epoch+1}/{trainer.epochs}"]
+        logs = [f"Epoch {trainer.state.epoch + 1}/{trainer.epochs}"]
 
         for k in sorted(epoch_means.keys()):
             if self.verbose or "loss" in k.lower():

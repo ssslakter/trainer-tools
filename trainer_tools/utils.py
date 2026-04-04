@@ -61,7 +61,9 @@ def flatten_config(cfg, parent_key="", sep="."):
             items.append((new_key, v))
     return dict(items)
 
+
 T = TypeVar("T")
+
 
 def init_config_from_args(config_obj: T, config_cls: type[T], kwargs: dict) -> T:
     """Initialize a config object from either a config object or kwargs."""

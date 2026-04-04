@@ -13,6 +13,7 @@ from trainer_tools.hooks import CheckpointHook, LRSchedulerHook
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class LinearModel(nn.Module):
     """Single-weight model for deterministic gradient math."""
 
@@ -27,6 +28,7 @@ class LinearModel(nn.Module):
 
 class CancelAtStepHook(BaseHook):
     """Raises KeyboardInterrupt once trainer reaches *step* on *epoch*."""
+
     ord = 100
 
     def __init__(self, step: int, epoch: int = 0):
@@ -47,6 +49,7 @@ def _make_constant_loader(x_val=1.0, y_val=0.0, n=4, batch_size=1):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_accelerate_basic_training(simple_model, tuple_loaders, simple_train_step):
     """AccelerateHook should run a basic training loop without errors."""
@@ -100,10 +103,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
     assert ckpt_path.exists()
 
     # Snapshot weights from first run
-    weights_before = {
-        k: v.clone()
-        for k, v in trainer_1.accelerator.unwrap_model(model_1).state_dict().items()
-    }
+    weights_before = {k: v.clone() for k, v in trainer_1.accelerator.unwrap_model(model_1).state_dict().items()}
 
     # --- second run: resume and verify immediately --------------------------
     model_2 = type(simple_model)()
@@ -186,9 +186,7 @@ def test_accelerate_grad_accum_with_lr_scheduler(simple_train_step):
     opt = torch.optim.SGD(model.parameters(), lr=0.1)
     dl = _make_constant_loader(n=4, batch_size=1)
 
-    sched_hook = LRSchedulerHook(
-        lambda o: torch.optim.lr_scheduler.StepLR(o, step_size=1, gamma=0.5)
-    )
+    sched_hook = LRSchedulerHook(lambda o: torch.optim.lr_scheduler.StepLR(o, step_size=1, gamma=0.5))
     accel_hook = AccelerateHook(gradient_accumulation_steps=2)
 
     trainer = Trainer(

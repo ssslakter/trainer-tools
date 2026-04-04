@@ -77,13 +77,14 @@ class HFStyleModel(nn.Module):
 
 # --- Fixtures ---
 
+
 @pytest.fixture
 def simple_train_step():
     def train_step(batch, trainer):
         x, y = batch
         preds = trainer.model(x)
         loss_fn = nn.CrossEntropyLoss() if preds.shape[-1] > 1 else nn.MSELoss()
-        
+
         # If the target is just [0.0] or something of shape (1, 1), MSELoss works best.
         # But here y might be target class index, so if preds shape is (..., 2) we do CE.
         if preds.shape[-1] == 2:
@@ -91,7 +92,9 @@ def simple_train_step():
         else:
             loss = loss_fn(preds, y)
         return {"loss": loss, "preds": preds, "targets": y}
+
     return train_step
+
 
 @pytest.fixture
 def hf_train_step():
@@ -101,7 +104,9 @@ def hf_train_step():
         if "labels" in batch:
             outputs["labels"] = batch["labels"]
         return outputs
+
     return train_step
+
 
 @pytest.fixture
 def tuple_loaders():

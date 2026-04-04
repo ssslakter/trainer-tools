@@ -53,10 +53,10 @@ class Loss(Metric):
 
     def __call__(self, trainer: Trainer):
         val = self.get_value(trainer, self.loss_key, self.loss_fn)
-            
+
         if isinstance(val, torch.Tensor):
             val = val.item()
-            
+
         return {self.name: val}
 
 
@@ -76,5 +76,5 @@ class Accuracy(Metric):
             preds = logits.argmax(dim=-1) if logits.ndim > 1 else (logits > 0.5)
 
         target = self.get_value(trainer, self.target_key, self.target_fn)
-            
+
         return {self.name: (preds == target).float().mean().item()}

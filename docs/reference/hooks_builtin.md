@@ -50,6 +50,16 @@
       members:
         - __init__
 
+::: trainer_tools.hooks.EMAHook
+    options:
+      members:
+        - __init__
+
+::: trainer_tools.hooks.accelerate.AccelerateHook
+    options:
+      members:
+        - __init__
+
 ::: trainer_tools.hooks.ProgressBarHook
     options:
       members:

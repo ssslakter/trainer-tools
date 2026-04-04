@@ -5,24 +5,22 @@ from .base import BaseHook
 
 log = logging.getLogger(__name__)
 
+
 class MemoryProfilerHook(BaseHook):
     """
     PyTorch Memory Profiler Hook.
-    
+
     Args:
         save_dir: Where to save the .pickle files.
         dump_every: Number of steps between snapshots.
         max_entries: Limit history size to avoid overhead (default 100,000).
         record_stacks: If 'all', captures stack traces for every allocation.
     """
-    ord = 100 # Runs late to ensure all step processing is finished
+
+    ord = 100  # Runs late to ensure all step processing is finished
 
     def __init__(
-        self, 
-        save_dir: str = "./memory_snapshots", 
-        dump_every: int = 200, 
-        max_entries: int = 100000,
-        mode: str = "all"
+        self, save_dir: str = "./memory_snapshots", dump_every: int = 200, max_entries: int = 100000, mode: str = "all"
     ):
         self.save_dir = Path(save_dir)
         self.dump_every = dump_every
@@ -36,12 +34,9 @@ class MemoryProfilerHook(BaseHook):
             return
 
         self.save_dir.mkdir(parents=True, exist_ok=True)
-        
+
         try:
-            torch.cuda.memory._record_memory_history(
-                enabled=self.mode,
-                max_entries=self.max_entries
-            )
+            torch.cuda.memory._record_memory_history(enabled=self.mode, max_entries=self.max_entries)
             self._enabled = True
             log.info(f"Memory history recording enabled (mode={self.mode}).")
         except Exception as e:

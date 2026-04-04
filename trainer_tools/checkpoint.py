@@ -3,6 +3,7 @@ from .imports import *
 import logging
 import importlib
 
+
 def get_class(target_str):
     """Retrieves a class object from a string dot-path."""
     try:
@@ -11,10 +12,9 @@ def get_class(target_str):
         return getattr(module, class_name)
     except (ImportError, AttributeError, ValueError) as e:
         raise ImportError(f"Could not import {target_str}. Error: {e}")
-    
+
 
 log = logging.getLogger(__name__)
-
 
 
 def save_pretrained(model: nn.Module, save_dir: str, config: Optional[DictConfig] = None):
@@ -88,10 +88,9 @@ def load_from_pretrained(
 
     if config is None:
         raise ValueError(
-            f"Cannot build model without config. No config.yaml found in {model_dir}. "
-            "Use return_model=False to get state_dict only."
+            f"Cannot build model without config. No config.yaml found in {model_dir}. Use return_model=False to get state_dict only."
         )
-    model_cls = config.get("__target__", config.get("class", ''))
+    model_cls = config.get("__target__", config.get("class", ""))
     model = get_class(model_cls)(**config)
     model.load_state_dict(state_dict)
 

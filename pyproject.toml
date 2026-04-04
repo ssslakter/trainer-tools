@@ -9,7 +9,7 @@ dependencies = [
     "matplotlib",
     "tqdm",
     "accelerate>=1.12.0,<2",
-    "omegaconf"
+    "omegaconf",
 ]
 name = "trainer-tools"
 readme = "README.md"
@@ -58,11 +58,9 @@ dev = { features = ["dev"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }
 
 [tool.pytest.ini_options]
-filterwarnings = [
-    "ignore:The pynvml package is deprecated:FutureWarning",
-]
+filterwarnings = ["ignore:The pynvml package is deprecated:FutureWarning"]
 
-[tool.black]
+[tool.ruff]
 line-length = 120
 
 [tool.semantic_release]
@@ -85,5 +83,6 @@ dev = [
     "build",
     "twine",
     "python-semantic-release",
+    "ruff",
 ]
 docs = ["mkdocs", "mkdocs-material", "mkdocstrings[python]", "mkdocs-autorefs"]

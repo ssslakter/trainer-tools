@@ -32,6 +32,32 @@ class GradientMonitorHook(BaseHook):
                 trainer.state.output[f"grad_{name}"] = mean_grad
 ```
 
+## Understanding the Lifecycle
+
+`Trainer.fit()` runs a standard PyTorch training loop but exposes **hook points** at every meaningful stage so you can inject logic without touching the core loop.
+
+The execution order is roughly:
+
+```text
+fit()
+├── before_fit
+└── for each epoch:
+    ├── before_epoch
+    ├── for each training batch:
+    │   ├── before_step
+    │   ├── train_step()      → populates trainer.state.output
+    │   ├── do_backward()     → loss_t.backward()
+    │   ├── after_backward
+    │   ├── do_opt_step()     → opt.step()
+    │   ├── do_zero_grad()    → opt.zero_grad()
+    │   └── after_step
+    ├── before_valid
+    ├── for each validation batch:
+    │   └── (same as above, invoking eval_step() without backward/opt steps)
+    └── after_epoch
+└── after_fit           (or after_cancel on KeyboardInterrupt)
+```
+
 ## Exploring Hook Order
 
 A quick way to understand exactly when and what lifecycle hooks trigger depending where you place them is to utilize the `trainer.describe_hooks()` command on an instantiated trainer.

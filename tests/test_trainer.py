@@ -27,7 +27,9 @@ def test_trainer_dict_dataloader(hf_model, dict_loaders, tmp_path, hf_train_step
     train_dl, valid_dl = dict_loaders
     opt = torch.optim.Adam(hf_model.parameters(), lr=0.01)
     hist_file = tmp_path / "metrics.jsonl"
-    metrics = MetricsHook(metrics=[Accuracy(pred_key="logits", target_key="labels"), Loss()], log_file=hist_file, tracker_type='file')
+    metrics = MetricsHook(
+        metrics=[Accuracy(pred_key="logits", target_key="labels"), Loss()], log_file=hist_file, tracker_type="file"
+    )
 
     trainer = Trainer(
         model=hf_model,
