@@ -1,0 +1,49 @@
+site_name: Trainer Tools
+site_url: https://ssslakter.github.io/trainer-tools
+repo_url: https://github.com/ssslakter/trainer-tools
+repo_name: ssslakter/trainer-tools
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_root_heading: true
+            show_source: true
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - Trainer: reference/trainer.md
+    - Hooks:
+      - Hooks Basics: reference/hooks.md
+      - Metrics: reference/hooks_metrics.md
