@@ -43,12 +43,12 @@ class MetricsHook(MainProcessHook):
         self,
         metrics: List[Metric],
         verbose: bool = True,
-        tracker_type: str = None,
-        config: Union[dict, str] = None,
+        tracker_type: Optional[str] = None,
+        config: Union[dict, str, None] = None,
         freq: int = 1,
         log_file: Optional[str] = "metrics.jsonl",
-        name: str = None,
-        project: str = None,
+        name: Optional[str] = None,
+        project: Optional[str] = None,
         **tracker_kwargs: Any,
     ):
         """Aggregates Metric outputs and logs them to the console and/or a tracker.
