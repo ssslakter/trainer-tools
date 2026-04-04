@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-04-04)
+
+### Bug Fixes
+
+- Add types
+  ([`c351422`](https://github.com/ssslakter/trainer-tools/commit/c351422be484aa5211293e134a0107dbccfa9926))
+
+### Features
+
+- Add simple_train_step fixture and refactor training step handling in tests
+  ([`d729c4f`](https://github.com/ssslakter/trainer-tools/commit/d729c4f0a4e0ecec388103ea8e35fc0ea3cc0858))
+
+- Improve multi gpu support
+  ([`0093967`](https://github.com/ssslakter/trainer-tools/commit/0093967a4583879c491fc7ccf1ba5ed310a24853))
+
+### Patch
+
+- Code formatting
+  ([`fdf9484`](https://github.com/ssslakter/trainer-tools/commit/fdf9484930e9ee6cecacdff78b8196b1a99e7547))
+
+- Improve docs
+  ([`8069d54`](https://github.com/ssslakter/trainer-tools/commit/8069d548c90c6fa530f306d3ec0ff73329297028))
+
+- Refactor Trainer State Management and Hook System
+  ([`5e45d96`](https://github.com/ssslakter/trainer-tools/commit/5e45d9679fa1d7f77813eb0f11f2c470ec25a4f4))
+
+- Rename state to step_state, add shared hooks state
+  ([`d98fd67`](https://github.com/ssslakter/trainer-tools/commit/d98fd67acc9fe630c3c9aa40786e9360ee55b48a))
+
+
 ## v0.3.0 (2026-03-02)
 
 ### Bug Fixes
