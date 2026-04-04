@@ -32,12 +32,18 @@ def test_mse_metric_adequacy(tmp_path):
     log_file = "metrics.jsonl"
     metrics_hook = MetricsHook(metrics=[Loss()], history_file=log_file, tracker_type='file')
 
+    def train_step(batch, trainer):
+        x, y = batch
+        preds = model(x)
+        loss = nn.MSELoss()(preds, y)
+        return {"loss": loss, "preds": preds, "targets": y}
+
     trainer = Trainer(
         model=model,
+        train_step=train_step,
         train_dl=dl,
         valid_dl=dl,
         optim=torch.optim.SGD(model.parameters(), lr=0.0),
-        loss_func=nn.MSELoss(),
         epochs=1,
         hooks=[metrics_hook],
         device="cpu",

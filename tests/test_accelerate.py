@@ -48,7 +48,7 @@ def _make_constant_loader(x_val=1.0, y_val=0.0, n=4, batch_size=1):
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_accelerate_basic_training(simple_model, tuple_loaders):
+def test_accelerate_basic_training(simple_model, tuple_loaders, simple_train_step):
     """AccelerateHook should run a basic training loop without errors."""
     train_dl, valid_dl = tuple_loaders
     model = simple_model
@@ -59,7 +59,7 @@ def test_accelerate_basic_training(simple_model, tuple_loaders):
         train_dl=train_dl,
         valid_dl=valid_dl,
         optim=opt,
-        loss_func=nn.CrossEntropyLoss(),
+        train_step=simple_train_step,
         epochs=2,
         hooks=[AccelerateHook()],
         device="cpu",
@@ -70,7 +70,7 @@ def test_accelerate_basic_training(simple_model, tuple_loaders):
     assert trainer.state.epoch == 1  # 0-indexed, finished epoch index
 
 
-def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_path):
+def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_path, simple_train_step):
     """Checkpoint saved under AccelerateHook should restore model weights and step."""
     train_dl, valid_dl = tuple_loaders
     save_dir = tmp_path / "ckpts"
@@ -84,7 +84,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
         train_dl=train_dl,
         valid_dl=valid_dl,
         optim=opt_1,
-        loss_func=nn.CrossEntropyLoss(),
+        train_step=simple_train_step,
         epochs=4,
         hooks=[
             AccelerateHook(),
@@ -125,7 +125,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
         train_dl=train_dl,
         valid_dl=valid_dl,
         optim=opt_2,
-        loss_func=nn.CrossEntropyLoss(),
+        train_step=simple_train_step,
         epochs=4,
         hooks=[
             AccelerateHook(),
@@ -138,7 +138,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
         trainer_2.fit()
 
 
-def test_accelerate_gradient_accumulation():
+def test_accelerate_gradient_accumulation(simple_train_step):
     """Gradient accumulation via AccelerateHook should match the standalone hook result.
 
     Setup (identical to test_grad_accum.py):
@@ -163,7 +163,7 @@ def test_accelerate_gradient_accumulation():
         train_dl=dl,
         valid_dl=dl,
         optim=opt,
-        loss_func=nn.MSELoss(),
+        train_step=simple_train_step,
         epochs=1,
         hooks=[AccelerateHook(gradient_accumulation_steps=2)],
         device="cpu",
@@ -174,7 +174,7 @@ def test_accelerate_gradient_accumulation():
     assert abs(final_w - 0.64) < 1e-5, f"Expected 0.64, got {final_w}"
 
 
-def test_accelerate_grad_accum_with_lr_scheduler():
+def test_accelerate_grad_accum_with_lr_scheduler(simple_train_step):
     """LRSchedulerHook should only step on actual optimizer-update boundaries.
 
     With accum_steps=2 and 4 micro-batches, there are 2 real optimizer steps.
@@ -196,7 +196,7 @@ def test_accelerate_grad_accum_with_lr_scheduler():
         train_dl=dl,
         valid_dl=dl,
         optim=opt,
-        loss_func=nn.MSELoss(),
+        train_step=simple_train_step,
         epochs=1,
         hooks=[accel_hook, sched_hook],
         device="cpu",

@@ -5,7 +5,7 @@ from trainer_tools.trainer import Trainer
 from trainer_tools.hooks import CheckpointHook
 
 
-def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path):
+def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path, simple_train_step):
     train_dl, valid_dl = tuple_loaders
     save_dir = tmp_path / "checkpoints"
 
@@ -24,7 +24,7 @@ def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path):
         train_dl=train_dl,
         valid_dl=valid_dl,
         optim=torch.optim.Adam(simple_model.parameters()),
-        loss_func=nn.CrossEntropyLoss(),
+        train_step=simple_train_step,
         epochs=4,
         hooks=[ckpt_hook_1, CancelHook(step=10, epoch=2)],
         device="cpu",
@@ -55,7 +55,7 @@ def test_checkpoint_resume(simple_model, tuple_loaders, tmp_path):
         train_dl=train_dl,
         valid_dl=valid_dl,
         optim=torch.optim.Adam(model_2.parameters()),
-        loss_func=nn.CrossEntropyLoss(),
+        train_step=simple_train_step,
         epochs=4,
         hooks=[ckpt_hook_2, VerificationHook()],
         device="cpu",

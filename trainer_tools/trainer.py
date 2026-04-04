@@ -17,6 +17,7 @@ class StepState:
     epoch: int = 0
     grad_accum_steps: int = 1
     num_processes: int = 1
+    output: dict = field(default_factory=dict)
 
     def should_step_optimizer(self, is_last_batch: bool = False) -> bool:
         return (self.batch_idx + 1) % self.grad_accum_steps == 0 or is_last_batch
@@ -36,41 +37,33 @@ class Trainer:
     Helper class that contains training and evaluation loop.
 
     This class provides a generic framework for training. To adapt it for a specific
-    model or task, you can extend its functionality in two primary ways:
+    model or task, provide a `train_step` callback that processes a batch and returns
+    a dictionary containing at minimum a 'loss' key.
 
-    1. Inheritance:
-       Create a new class that inherits from `BaseTrainer`. You MUST implement
-       the following methods:
-       - `predict(self, xb)`: Defines how the model processes an input batch `xb`.
-         The results should be stored as instance attributes (e.g., `self.preds`)
-         to be used by the loss function.
-       - `get_loss(self)`: Defines how the loss is calculated using the outputs
-         from `predict()` and the ground truth `self.yb`.
-
-    2. Hooks (Callbacks):
-        You can also add call other functions or add/modify attributes during training by using callbacks. You have to create
-       class with methods corresponding to training stages. The available hook points
-       are: `begin_fit`, `after_fit`, `begin_epoch`, `after_epoch`, `begin_step`,
-       `after_step`, `after_pred`, `after_loss`, and `after_backward`. Pass a list
-       of hook instances or single hook to the `hooks` parameter during initialization.
+    You can also add call other functions or add/modify attributes during training by using callbacks. You have to create
+    class with methods corresponding to training stages. The available hook points
+    are: `begin_fit`, `after_fit`, `begin_epoch`, `after_epoch`, `before_step`,
+    `after_step`, `after_backward`. Pass a list
+    of hook instances or single hook to the `hooks` parameter during initialization.
     """
 
-    target_keys: list = ["y", "targets", "labels", "target", "label"]
     model: nn.Module
 
     def __init__(
         self,
         model,
+        train_step: Callable,
         train_dl=None,
         valid_dl=None,
+        eval_step: Callable | None = None,
         optim: t.optim.Optimizer | None = None,
-        loss_func: Callable | None = None,
         epochs=10,
         hooks=None,
         device=default_device,
         config=None,
     ):
-        self.model, self.train_dl, self.valid_dl, self.opt, self.loss_func = model, train_dl, valid_dl, optim, loss_func
+        self.model, self.train_step, self.train_dl, self.valid_dl, self.opt = model, train_step, train_dl, valid_dl, optim
+        self.eval_step = eval_step or train_step
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
         self.accelerator: Accelerator = None
@@ -93,47 +86,10 @@ class Trainer:
                 continue
             getattr(hook, method_name, lambda trainer: None)(self)
 
-    def get_loss(self, preds, target) -> torch.Tensor:
-        """Calculates the loss for the current batch. Can be overwritten by a subclass."""
-        if isinstance(preds, dict) and "loss" in preds:
-            return preds["loss"]
-
-        if self.loss_func is None:
-            raise ValueError("No loss function provided. Please implement get_loss, provide loss_func or return loss from the model")
-        return self.loss_func(preds, target)
-
-    def get_input(self, batch):
-        """Extracts inputs from the batch. Can be overwritten by a subclass."""
-        if isinstance(batch, (list, tuple)):
-            xb, _ = batch
-            return xb
-        elif isinstance(batch, dict):
-            return {k: v for k, v in batch.items() if k not in self.target_keys}
-        return batch
-
-    def get_target(self, batch):
-        """Extracts targets from the batch. Can be overwritten by a subclass."""
-        if isinstance(batch, (list, tuple)):
-            _, yb = batch
-            return yb
-        elif isinstance(batch, dict):
-            for key in self.target_keys:
-                if key in batch:
-                    return batch[key]
-        # if no target key is found, return input in case of self-supervised learning
-        return self.get_input(batch)
-
-    def predict(self, batch) -> dict:
-        """Performs a forward pass on the model. Can be overwritten by a subclass."""
-        inputs = self.get_input(batch)
-        if isinstance(inputs, dict):
-            return self.model(**inputs)
-        return self.model(inputs)
-    
     def do_backward(self):
         """Performs backward pass. Can be replaced by hooks or subclasses."""
-        if self.loss_t is not None:
-            self.loss_t.backward()
+        if "loss" in self.state.output:
+            self.state.output["loss"].backward()
     
     def do_opt_step(self) -> bool:
         """
@@ -153,13 +109,19 @@ class Trainer:
         if not self.is_distributed:
             self.batch = to_device(self.batch, self.device)
 
-        self.preds = self.predict(self.batch)
+        step_func = self.train_step if self.model.training else self.eval_step
+        output = step_func(self.batch, self)
+        
+        if not isinstance(output, dict):
+            raise TypeError(f"The step function must return a dictionary, but got {type(output).__name__}.")
+        self.state.output = output
 
-        self._call_hook("after_pred")
-        self.loss_t = self.get_loss(self.preds, self.get_target(self.batch))
-        if self.loss_t is not None:
-            self.loss = self.loss_t.item()
-        self._call_hook("after_loss")
+        if "loss" in output:
+            self.loss = output["loss"].item()
+            self.loss_t = output["loss"]
+        else:
+            self.loss = None
+            self.loss_t = None
         
         if self.model.training:
             self.do_backward()
@@ -178,7 +140,8 @@ class Trainer:
             batch_size = self._get_batch_size(self.batch)
             self.state.increment_batch(batch_size, is_training=True, did_optimizer_step=self._did_opt_step)
 
-        self.loss_t = self.preds = None
+        self.batch = None
+        self.state.output = {}
     
     def _get_batch_size(self, batch) -> int:
         """Extract batch size from batch for state tracking."""
@@ -239,3 +202,35 @@ class Trainer:
         if default is not RAISE:
             return default
         raise KeyError(f"Hook {cls} not found")
+        
+    def describe_hooks(self):
+        """Prints a Markdown table of hooks to tell you what runs when and in what order."""
+        from .hooks.base import BaseHook # local import
+        points = [
+            "before_fit", "before_epoch", "before_step",
+            "after_pred", "after_loss", "after_backward",
+            "after_step", "before_valid", "after_epoch",
+            "after_fit", "after_cancel"
+        ]
+        
+        sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
+        lines = ["| Lifecycle Point | Hook | Order |", "| --------------- | ---- | ----- |"]
+        
+        for point in points:
+            active_hooks = []
+            for h in sorted_hooks:
+                cls_method = getattr(type(h), point, None)
+                base_method = getattr(BaseHook, point, None)
+                is_dynamic = point in getattr(h, "callbacks", {})
+                if cls_method is not base_method or is_dynamic:
+                    active_hooks.append(h)
+                            
+            if not active_hooks:
+                lines.append(f"| {point} | (none) | |")
+            for i, h in enumerate(active_hooks):
+                name = h.__class__.__name__
+                order = getattr(h, "ord", 0)
+                point_str = point if i == 0 else ""
+                lines.append(f"| {point_str} | {name} | {order} |")
+        
+        print("\n".join(lines))

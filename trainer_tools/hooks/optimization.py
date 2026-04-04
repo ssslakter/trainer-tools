@@ -61,13 +61,28 @@ class AMPHook(BaseHook):
         original_backward = trainer.do_backward
         original_opt_step = trainer.do_opt_step
         
+        original_train_step = trainer.train_step
+        original_eval_step = trainer.eval_step
+        
+        def amp_train_step(batch, t):
+            with trainer.autocast:
+                return original_train_step(batch, t)
+                
+        def amp_eval_step(batch, t):
+            with trainer.autocast:
+                return original_eval_step(batch, t)
+                
+        trainer.train_step = amp_train_step
+        trainer.eval_step = amp_eval_step
+        
         def amp_backward():
-            if trainer.loss_t is not None:
-                scaled_loss = trainer.scaler.scale(trainer.loss_t)
+            if "loss" in trainer.state.output:
+                scaled_loss = trainer.scaler.scale(trainer.state.output["loss"])
                 scaled_loss.backward()
         
         def amp_opt_step():
-            if trainer.loss != 0:
+            loss = trainer.state.output.get("loss", 1)
+            if loss != 0:
                 trainer.scaler.step(trainer.opt)
                 trainer.scaler.update()
                 return True
@@ -76,13 +91,6 @@ class AMPHook(BaseHook):
         trainer.do_backward = amp_backward
         trainer.do_opt_step = amp_opt_step
 
-    def before_step(self, trainer):
-        """Called before the forward pass. Enter the autocast context."""
-        trainer.autocast.__enter__()
-
-    def after_loss(self, trainer: Trainer):
-        """Called after loss calculation. Exit the autocast context."""
-        trainer.autocast.__exit__(None, None, None)
 
 
 class EmptyCudaCacheHook(BaseHook):
@@ -121,10 +129,15 @@ class GradientAccumulationHook(BaseHook):
         """Configure StepState and wrap optimizer operations."""
         trainer.state.grad_accum_steps = self.steps
         
-        # Wrap operations to skip step/zero_grad when accumulating
+        original_backward = trainer.do_backward
         original_opt_step = trainer.do_opt_step
         original_zero_grad = trainer.do_zero_grad
         
+        def grad_accum_backward():
+            if "loss" in trainer.state.output:
+                trainer.state.output["loss"] = trainer.state.output["loss"] / self.steps
+            original_backward()
+                
         def grad_accum_opt_step():
             is_last_batch = (trainer.state.batch_idx + 1) >= len(trainer.dl)
             if trainer.state.should_step_optimizer(is_last_batch):
@@ -136,10 +149,6 @@ class GradientAccumulationHook(BaseHook):
             if trainer.state.should_step_optimizer(is_last_batch):
                 original_zero_grad()
         
+        trainer.do_backward = grad_accum_backward
         trainer.do_opt_step = grad_accum_opt_step
         trainer.do_zero_grad = grad_accum_zero_grad
-
-    def after_loss(self, trainer):
-        """Scale loss by accumulation steps."""
-        if trainer.training and trainer.loss_t is not None:
-            trainer.loss_t = trainer.loss_t / self.steps

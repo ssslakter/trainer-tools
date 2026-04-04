@@ -1,6 +1,6 @@
 class BaseHook:
     """Base class for hooks. Hooks can interact with the Trainer at various points."""
-    
+
     ord: int = 0  # Order of execution, higher values run later
 
     def before_fit(self, trainer):
@@ -33,7 +33,7 @@ class BaseHook:
 
     def after_fit(self, trainer):
         pass
-    
+
     def after_cancel(self, trainer):
         """Called when training is interrupted (e.g. KeyboardInterrupt)"""
         pass
@@ -42,15 +42,24 @@ class BaseHook:
 class MainProcessHook(BaseHook):
     """
     Marker base class for hooks that should only run on the main process.
-    
-    Hooks that inherit from this class will be automatically skipped on 
-    non-main processes in distributed training, eliminating the need for 
+
+    Hooks that inherit from this class will be automatically skipped on
+    non-main processes in distributed training, eliminating the need for
     'if trainer.is_main' guards inside the hook implementation.
-    
+
     Typical use cases:
     - Metrics logging
     - Checkpointing
     - Progress bars
     - Any I/O or console output
     """
+
     pass
+
+
+class LambdaHook(BaseHook):
+    """Creates a hook from callables passed as keyword arguments."""
+
+    def __init__(self, **callbacks):
+        for k, v in callbacks.items():
+            setattr(self, k, v)

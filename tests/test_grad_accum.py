@@ -14,7 +14,7 @@ class LinearModel(nn.Module):
     def forward(self, x):
         return self.fc(x)
 
-def test_gradient_accumulation():
+def test_gradient_accumulation(simple_train_step):
     torch.manual_seed(42)
     model = LinearModel()
     opt = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -32,7 +32,7 @@ def test_gradient_accumulation():
         train_dl=dl,
         valid_dl=dl, 
         optim=opt,
-        loss_func=nn.MSELoss(),
+        train_step=simple_train_step,
         epochs=1,
         hooks=[accum_hook],
         device="cpu"
