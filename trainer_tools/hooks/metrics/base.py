@@ -28,7 +28,7 @@ class Metric(ABC):
     def should_run(self, trainer) -> bool:
         if not trainer.training:
             return True
-        return trainer.step % self.freq == 0
+        return trainer.state.optimizer_step % self.freq == 0
 
     @abstractmethod
     def __call__(self, trainer) -> dict:

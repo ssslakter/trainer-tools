@@ -2,7 +2,7 @@ import logging, json
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
 from ...imports import *
-from ...hooks.base import BaseHook
+from ...hooks.base import MainProcessHook
 from .base import Metric
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ except ImportError:
     pass
 
 
-class MetricsHook(BaseHook):
+class MetricsHook(MainProcessHook):
     """
     Aggregates data from multiple Metrics and logs to console/tracker.
     Only ONE instance of this hook is needed per Trainer.
@@ -132,7 +132,7 @@ class MetricsHook(BaseHook):
     def before_fit(self, trainer):
         dl = getattr(trainer, "dl", getattr(trainer, "train_dl"))
         self.steps_per_epoch = len(dl)
-        if self.use_tracker and trainer.is_main:
+        if self.use_tracker:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
     def before_epoch(self, trainer):
@@ -150,10 +150,10 @@ class MetricsHook(BaseHook):
 
     def after_step(self, trainer):
         self._run_metrics(trainer, "after_step")
-        self.step_data["step"] = trainer.step
-        if trainer.training and trainer.step % self.freq == 0 and trainer.is_main:
+        self.step_data["step"] = trainer.state.samples_seen
+        if trainer.training and trainer.state.optimizer_step % self.freq == 0:
             if self.use_tracker:
-                current_step = self.step_data.pop("step", trainer.step)
+                current_step = self.step_data.pop("step", trainer.state.samples_seen)
                 self.tracker.log(self.step_data, current_step)
             elif self.use_file:
                 with open(self.log_file, "a") as f:
@@ -164,24 +164,22 @@ class MetricsHook(BaseHook):
         self.epoch_data = epoch_means = {k: self.aggregators[k] / self.counts[k] for k in self.aggregators}
         val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
-        if trainer.is_main:
-            if self.use_tracker and val_stats:
-                self.tracker.log(val_stats, trainer.step)
-            elif self.use_file and val_stats:
-                with open(self.log_file, "a") as f:
-                    f.write(json.dumps({"epoch": trainer.epoch, **epoch_means}) + "\n")
+        if self.use_tracker and val_stats:
+            self.tracker.log(val_stats, trainer.state.samples_seen)
+        elif self.use_file and val_stats:
+            with open(self.log_file, "a") as f:
+                f.write(json.dumps({"epoch": trainer.state.epoch, **epoch_means}) + "\n")
 
-        logs = [f"Epoch {trainer.epoch+1}/{trainer.epochs}"]
+        logs = [f"Epoch {trainer.state.epoch+1}/{trainer.epochs}"]
 
         for k in sorted(epoch_means.keys()):
             if self.verbose or "loss" in k.lower():
                 logs.append(f"{k}: {epoch_means[k]:.4f}")
 
-        if trainer.is_main:
-            log.info(" | ".join(logs))
+        log.info(" | ".join(logs))
 
     def after_fit(self, trainer):
-        if self.use_tracker and trainer.is_main:
+        if self.use_tracker:
             self.tracker.finish()
 
     def plot(self, axes=None, metrics=["loss"], show_epochs=False):

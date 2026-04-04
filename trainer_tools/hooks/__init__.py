@@ -1,4 +1,4 @@
-from .base import BaseHook
+from .base import BaseHook, MainProcessHook
 from .metrics import *
 from .pbar import ProgressBarHook
 from .optimization import LRSchedulerHook, AMPHook, GradClipHook, GradientAccumulationHook

@@ -64,6 +64,13 @@ class AccelerateHook(BaseHook):
         if hook := trainer.get_hook(LRSchedulerHook, None):
             hook.sched = self.accelerator.prepare(hook.sched)
 
+        # Wrap operations to use accelerate's backward
+        def accelerate_backward():
+            if trainer.loss_t is not None:
+                self.accelerator.backward(trainer.loss_t)
+        
+        trainer.do_backward = accelerate_backward
+
         log.info(
             "AccelerateHook initialised — device: %s, mixed-precision: %s, "
             "grad-accum steps: %s, distributed: %s",
@@ -78,11 +85,6 @@ class AccelerateHook(BaseHook):
         if trainer.training:
             self._accumulate_ctx = self.accelerator.accumulate(trainer.model)
             self._accumulate_ctx.__enter__()
-
-    def after_loss(self, trainer: Trainer):
-        if trainer.training:
-            self.accelerator.backward(trainer.loss_t)
-            trainer.skip_backward = True
 
     def after_backward(self, trainer: Trainer):
         if self.max_grad_norm and self.accelerator.sync_gradients:

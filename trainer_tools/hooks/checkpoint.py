@@ -1,7 +1,7 @@
 import logging
 from .ema import EMAHook
 from ..imports import *
-from .base import BaseHook
+from .base import MainProcessHook
 from ..trainer import Trainer
 import os
 from omegaconf import OmegaConf
@@ -11,7 +11,7 @@ from .metrics import MetricsHook
 log = logging.getLogger(__name__)
 
 
-class CheckpointHook(BaseHook):
+class CheckpointHook(MainProcessHook):
     """
     Saves model, optimizer, scheduler, scaler, and RNG states.
     Can resume training from a checkpoint.
@@ -64,7 +64,7 @@ class CheckpointHook(BaseHook):
         return None
 
     def _save_config(self, trainer: Trainer):
-        if self.config_saved or not trainer.is_main:
+        if self.config_saved:
             return
         if not (config := getattr(trainer, "config", None)):
             return
@@ -82,15 +82,14 @@ class CheckpointHook(BaseHook):
         # Skipped for interrupt saves where a barrier could deadlock.
         if trainer.is_distributed and sync:
             trainer.accelerator.wait_for_everyone()
-        if not trainer.is_main:
-            return
 
         path = self.save_dir / filename
         state = {
             "model": self._unwrap_model(trainer).state_dict(),
             "opt": trainer.opt.state_dict(),
-            "epoch": trainer.epoch,
-            "step": trainer.step,
+            "epoch": trainer.state.epoch,
+            "optimizer_step": trainer.state.optimizer_step,
+            "samples_seen": trainer.state.samples_seen,
             "rng_torch": torch.get_rng_state(),
             "rng_numpy": np.random.get_state(),
         }
@@ -132,26 +131,19 @@ class CheckpointHook(BaseHook):
             return
         if Path(self.resume_path).exists():
             self.load_checkpoint(trainer, self.resume_path)
-            log.info(f"Resumed training from checkpoint: {self.resume_path}, step {trainer.step}/{trainer.n_steps}")
+            log.info(f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.state.optimizer_step}")
         else:
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
     def after_step(self, trainer: Trainer):
-        if trainer.is_distributed:
-            check_freq, index = False, None
-            for i in range(trainer.accelerator.num_processes):
-                step = trainer.step + i
-                if step % self.every == 0:
-                    check_freq = True
-                    break
-        else:
-            check_freq = trainer.step % self.every == 0
-            step = trainer.step
-
-        if not (trainer.training and trainer.step > 0 and check_freq):
+        if not (trainer.training and trainer.state.optimizer_step > 0):
+            return
+            
+        check_freq = trainer.state.optimizer_step % self.every == 0
+        if not check_freq:
             return
 
-        self._save(trainer, f"checkpoint_step_{step}.pt", is_best=False)
+        self._save(trainer, f"checkpoint_step_{trainer.state.optimizer_step}.pt", is_best=False)
 
         if self.save_strategy == "best":
             metrics_hook = trainer.get_hook(MetricsHook, None)
@@ -164,15 +156,13 @@ class CheckpointHook(BaseHook):
             current_metric = stats[self.metric]
             if current_metric < self._best_metric:
                 self._best_metric = current_metric
-                self._save(trainer, f"checkpoint_best_step_{step}.pt", is_best=True)
+                self._save(trainer, f"checkpoint_best_step_{trainer.state.optimizer_step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
         self._save(trainer, "checkpoint_interrupted.pt", sync=False)
 
     def after_fit(self, trainer: Trainer):
         self._save(trainer, "model_final.pt")
-        if not trainer.is_main:
-            return
 
         model_to_save = self._unwrap_model(trainer)
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
@@ -190,8 +180,9 @@ class CheckpointHook(BaseHook):
 
         self._unwrap_model(trainer).load_state_dict(checkpoint["model"])
         trainer.opt.load_state_dict(checkpoint["opt"])
-        trainer.epoch = checkpoint["epoch"]
-        trainer.step = checkpoint["step"]
+        trainer.state.epoch = checkpoint.get("epoch", 0)
+        trainer.state.optimizer_step = checkpoint.get("optimizer_step", checkpoint.get("step", 0))  # Backward compat
+        trainer.state.samples_seen = checkpoint.get("samples_seen", 0)
 
         torch.set_rng_state(checkpoint["rng_torch"].cpu())
         if torch.cuda.is_available() and "rng_cuda" in checkpoint:
@@ -210,4 +201,4 @@ class CheckpointHook(BaseHook):
                 log.warning("Checkpoint has scheduler state but no LRSchedulerHook found.")
         if "ema" in checkpoint:
             trainer._ema_state_buffer = checkpoint["ema"]
-        log.info(f"Resumed at Epoch {trainer.epoch}, Step {trainer.step}")
+        log.info(f"Resumed at Epoch {trainer.state.epoch}, OptimizerStep {trainer.state.optimizer_step}")

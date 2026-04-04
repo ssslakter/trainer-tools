@@ -1,4 +1,5 @@
 from typing import Type, TypeVar
+from dataclasses import dataclass, field
 from accelerate import Accelerator
 from .imports import *
 from .utils import default_device, to_device
@@ -6,6 +7,29 @@ from .utils import default_device, to_device
 T = TypeVar("T")
 RAISE = object()
 
+
+@dataclass
+class StepState:
+    """Centralized step/batch/sample counting, invariant to num_processes and grad accumulation."""
+    batch_idx: int = 0        # within current epoch
+    optimizer_step: int = 0   # increments after opt.step()
+    samples_seen: int = 0     # global across all processes, use as log x-axis
+    epoch: int = 0
+    grad_accum_steps: int = 1
+    num_processes: int = 1
+
+    def should_step_optimizer(self, is_last_batch: bool = False) -> bool:
+        return (self.batch_idx + 1) % self.grad_accum_steps == 0 or is_last_batch
+
+    def increment_batch(self, batch_size: int, is_training: bool = True, did_optimizer_step: bool = False):
+        self.batch_idx += 1
+        if is_training:
+            self.samples_seen += batch_size * self.num_processes
+            if did_optimizer_step:
+                self.optimizer_step += 1
+
+    def reset_epoch(self):
+        self.batch_idx = 0
 
 class Trainer:
     """
@@ -39,8 +63,8 @@ class Trainer:
         model,
         train_dl=None,
         valid_dl=None,
-        optim: t.optim.Optimizer = None,
-        loss_func: Callable = None,
+        optim: t.optim.Optimizer | None = None,
+        loss_func: Callable | None = None,
         epochs=10,
         hooks=None,
         device=default_device,
@@ -50,18 +74,23 @@ class Trainer:
         self.epochs, self.hooks = epochs, hooks if hooks else []
         self.device, self.config = device, config
         self.accelerator: Accelerator = None
+        self.state = StepState()
 
     @property
     def is_main(self):
         return not self.is_distributed or self.accelerator.is_main_process
-    
+
     @property
     def is_distributed(self):
         return self.accelerator is not None
 
     def _call_hook(self, method_name):
+        from .hooks.base import MainProcessHook
         sorted_hooks = sorted(self.hooks, key=lambda h: getattr(h, "ord", 0))
         for hook in sorted_hooks:
+            # Skip MainProcessHook instances on non-main processes
+            if isinstance(hook, MainProcessHook) and not self.is_main:
+                continue
             getattr(hook, method_name, lambda trainer: None)(self)
 
     def get_loss(self, preds, target) -> torch.Tensor:
@@ -100,16 +129,30 @@ class Trainer:
         if isinstance(inputs, dict):
             return self.model(**inputs)
         return self.model(inputs)
+    
+    def do_backward(self):
+        """Performs backward pass. Can be replaced by hooks or subclasses."""
+        if self.loss_t is not None:
+            self.loss_t.backward()
+    
+    def do_opt_step(self) -> bool:
+        """
+        Performs optimizer step. Can be replaced by hooks or subclasses.
+        Returns True if optimizer step was actually performed, False if skipped.
+        """
+        self.opt.step()
+        return True
+    
+    def do_zero_grad(self):
+        """Zeros gradients. Can be replaced by hooks or subclasses."""
+        self.opt.zero_grad()
 
     def _one_batch(self):
         """Process single batch forward, optionally with backward"""
         self._call_hook("before_step")
         if not self.is_distributed:
             self.batch = to_device(self.batch, self.device)
-        
-        self.skip_backward = False
-        self.skip_opt_step = False
-        self.skip_zero_grad = False
+
         self.preds = self.predict(self.batch)
 
         self._call_hook("after_pred")
@@ -117,34 +160,59 @@ class Trainer:
         if self.loss_t is not None:
             self.loss = self.loss_t.item()
         self._call_hook("after_loss")
+        
         if self.model.training:
-            if not self.skip_backward: self.loss_t.backward()
+            self.do_backward()
             self._call_hook("after_backward")
-            if not self.skip_opt_step: self.opt.step()
-            if not self.skip_zero_grad: self.opt.zero_grad()
+            
+            # Step optimizer and track whether it actually stepped
+            self._did_opt_step = self.do_opt_step()
+            self.do_zero_grad()
+        else:
+            self._did_opt_step = False
+            
         self._call_hook("after_step")
+        
+        # Update state after the step
         if self.model.training:
-            self.step += self.accelerator.num_processes if self.is_distributed else 1
+            batch_size = self._get_batch_size(self.batch)
+            self.state.increment_batch(batch_size, is_training=True, did_optimizer_step=self._did_opt_step)
 
         self.loss_t = self.preds = None
-        self.skip_opt_step = self.skip_zero_grad = False
+    
+    def _get_batch_size(self, batch) -> int:
+        """Extract batch size from batch for state tracking."""
+        if isinstance(batch, (list, tuple)):
+            first = batch[0]
+            if isinstance(first, torch.Tensor):
+                return first.shape[0]
+        elif isinstance(batch, dict):
+            for v in batch.values():
+                if isinstance(v, torch.Tensor):
+                    return v.shape[0]
+        elif isinstance(batch, torch.Tensor):
+            return batch.shape[0]
+        return 1  # fallback
 
     def _one_epoch(self):
         """Run single epoch"""
-        for self.batch_idx, self.batch in enumerate(self.dl):
+        self.state.reset_epoch()
+        for _, self.batch in enumerate(self.dl):
             self._one_batch()
         self.batch = None
 
     def fit(self):
         """Starts the training and validation loops for the specified number of epochs."""
-        self.n_steps = len(self.train_dl) * self.epochs
-        if self.is_distributed:
-            self.n_steps *= self.accelerator.num_processes
-        self.step = self.start_epoch = 0 if not self.is_distributed else self.accelerator.process_index
+        # Initialize state
+        self.state.num_processes = self.accelerator.num_processes if self.is_distributed else 1
+        self.start_epoch = 0
+        
         self._call_hook("before_fit")
         self.model.to(self.device)
         try:
-            for self.epoch in range(self.start_epoch, self.epochs):
+            for epoch_idx in range(self.start_epoch, self.epochs):
+                self.state.epoch = epoch_idx
+                
                 # Train
                 self.model.train()
                 self.training, self.dl = True, self.train_dl

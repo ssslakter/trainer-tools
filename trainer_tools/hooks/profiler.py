@@ -51,8 +51,8 @@ class MemoryProfilerHook(BaseHook):
         if not self._enabled or not trainer.training:
             return
 
-        if trainer.step > 0 and trainer.step % self.dump_every == 0:
-            self._dump(f"step_{trainer.step}")
+        if trainer.state.optimizer_step > 0 and trainer.state.optimizer_step % self.dump_every == 0:
+            self._dump(f"step_{trainer.state.optimizer_step}")
 
     def after_cancel(self, trainer):
         if self._enabled:
