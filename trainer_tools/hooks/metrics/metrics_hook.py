@@ -173,7 +173,7 @@ class MetricsHook(MainProcessHook):
             self.tracker.log(val_stats, trainer.step_state.samples_seen)
         elif self.use_file and val_stats:
             with open(self.log_file, "a") as f:
-                f.write(json.dumps({"epoch": trainer.step_state.epoch, **epoch_means}) + "\n")
+                f.write(json.dumps({"step": trainer.step_state.samples_seen, "epoch": trainer.step_state.epoch, **epoch_means}) + "\n")
 
         logs = [f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs}"]
 
