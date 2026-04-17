@@ -131,8 +131,6 @@ class MetricsHook(MainProcessHook):
                     self.counts[k] += 1
 
     def before_fit(self, trainer):
-        dl = getattr(trainer, "dl", getattr(trainer, "train_dl"))
-        self.steps_per_epoch = len(dl)
         if self.use_tracker:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 
@@ -201,8 +199,6 @@ class MetricsHook(MainProcessHook):
             fig, axes = plt.subplots(len(keys), 1, figsize=(8, 4 * len(keys)))
         axes = np.atleast_1d(axes)
 
-        steps_per_epoch = getattr(self, "steps_per_epoch", None)
-
         for ax, root in zip(axes, keys):
             for cat in ["step", "epoch"]:
                 if cat == "epoch" and not show_epochs:
@@ -211,9 +207,6 @@ class MetricsHook(MainProcessHook):
                     full_key = f"{pre}{root}"
                     if full_key in self.history[cat]:
                         data = self.history[cat][full_key]
-                        if cat == "epoch" and steps_per_epoch is not None:
-                            data = data.copy()
-                            data[0] = (data[0] + 1) * steps_per_epoch
                         fmt = "o-" if "valid" in pre or cat == "epoch" else "-"
                         ax.plot(*data, fmt, label=f"{cat} {pre}{root}".strip())
 
@@ -229,8 +222,13 @@ def load_metrics(path):
     raw, res = defaultdict(list), {"step": {}, "epoch": {}}
     with open(path) as f:
         for d in (json.loads(l) for l in f if l.strip()):
-            k = "step" if "step" in d else "epoch"
-            idx = d.pop(k)
+            k = "epoch" if "epoch" in d else "step"
+            if "step" in d:
+                idx = d.pop("step")
+            else:
+                idx = d.pop("epoch")
+            if "epoch" in d:
+                d.pop("epoch")
             for metric, val in d.items():
                 raw[k, metric].append([idx, val])
 
