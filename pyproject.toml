@@ -4,11 +4,10 @@ authors = [
 ]
 description = "Small utilities to simplify trainining of PyTorch models."
 dependencies = [
-    "torch>=2.2,<2.10",
+    "torch>=2.2,<3",
     "numpy",
     "matplotlib",
     "tqdm",
-    "accelerate>=1.12.0,<2",
     "omegaconf",
 ]
 name = "trainer-tools"
@@ -32,7 +31,9 @@ wandb = ["wandb"]
 trackio = ["trackio"]
 hydra = ["hydra-core"]
 mlop = ["mlop"]
-all = ["wandb", "trackio", "hydra-core", "mlop"]
+accelerate = ["accelerate>=1.12.0,<2"]
+core = ["accelerate>=1.12.0,<2", "trackio", "hydra-core"]
+all = ["wandb", "trackio", "hydra-core", "mlop", "accelerate>=1.12.0,<2"]
 
 
 [project.urls]

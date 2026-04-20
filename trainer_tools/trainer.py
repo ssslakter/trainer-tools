@@ -1,6 +1,11 @@
-from typing import Type, TypeVar
+from typing import Type, TypeVar, Any
 from dataclasses import dataclass, field
-from accelerate import Accelerator
+
+try:
+    from accelerate import Accelerator
+except ImportError:
+    Accelerator = Any
+
 from .imports import *
 from .utils import default_device, to_device
 

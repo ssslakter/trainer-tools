@@ -13,6 +13,10 @@ A lightweight, hook-based training loop for PyTorch. `trainer-tools` abstracts a
 ## Installation
 
 ```bash
+# Recommended installation (includes accelerate, trackio, and hydra)
+pip install trainer-tools[core]
+
+# Minimal installation
 pip install trainer-tools
 ```
 

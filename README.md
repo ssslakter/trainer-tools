@@ -27,6 +27,10 @@ There you will find in-depth guides and API references on:
 ## Installation
 
 ```bash
+# Recommended installation (includes accelerate, trackio, and hydra)
+pip install trainer-tools[core]
+
+# Minimal installation
 pip install trainer-tools
 
 # With optional integrations

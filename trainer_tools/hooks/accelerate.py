@@ -1,7 +1,13 @@
 import logging
 from typing import Any
 
-from accelerate import Accelerator
+try:
+    from accelerate import Accelerator
+    _HAS_ACCELERATE = True
+except ImportError:
+    Accelerator = Any
+    _HAS_ACCELERATE = False
+
 from ..trainer import Trainer
 from .base import BaseHook
 from .optimization import AMPHook, GradientAccumulationHook, GradClipHook, LRSchedulerHook
@@ -39,6 +45,11 @@ class AccelerateHook(BaseHook):
         max_grad_norm: float | None = None,
         **kwargs: Any,
     ):
+        if not _HAS_ACCELERATE:
+            raise ImportError(
+                "The 'accelerate' package is not installed. "
+                "Please install it using `pip install accelerate` to use AccelerateHook."
+            )
         self.accelerator = Accelerator(
             gradient_accumulation_steps=gradient_accumulation_steps,
             **kwargs,
