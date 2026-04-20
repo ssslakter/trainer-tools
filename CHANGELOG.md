@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.4.2 (2026-04-20)
+
+### Bug Fixes
+
+- Some improvements in dependencies
+  ([`1c4f7f2`](https://github.com/ssslakter/trainer-tools/commit/1c4f7f2e6825cb559ff7b4279bb207695161189c))
+
+- Tests in pipeline
+  ([`478aae1`](https://github.com/ssslakter/trainer-tools/commit/478aae19f384e5df21226c7c3794760172ecd5ed))
+
+
 ## v0.4.1 (2026-04-20)
 
 ### Bug Fixes
