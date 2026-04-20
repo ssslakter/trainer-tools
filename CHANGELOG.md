@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.4.1 (2026-04-20)
+
+### Bug Fixes
+
+- Correct plot in metrics
+  ([`c62d079`](https://github.com/ssslakter/trainer-tools/commit/c62d0792379373d9de44fa3aa2f905e0c64893b1))
+
+- Plot
+  ([`40c7029`](https://github.com/ssslakter/trainer-tools/commit/40c70293fde8618ac0d30a32493ac1408a4b5db6))
+
+
 ## v0.4.0 (2026-04-04)
 
 ### Bug Fixes
