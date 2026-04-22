@@ -5847,8 +5847,8 @@ packages:
   requires_python: '>=3.10'
 - pypi: ./
   name: trainer-tools
-  version: 0.4.1
-  sha256: 66597ef7b706ca4e15fc9c37ae72846dd0d4429ebb688e5f8f517546a862cd13
+  version: 0.4.2
+  sha256: 06771352863e7de9e8ca0e82876ff1856e78eba3e656ffb0832ea6949804b398
   requires_dist:
   - torch>=2.2,<3
   - numpy

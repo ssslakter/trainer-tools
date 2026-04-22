@@ -1,6 +1,5 @@
 from typing import Any
 import logging, json
-import dataclasses
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
 from ...imports import *
@@ -246,13 +245,14 @@ def load_metrics(path):
     raw, res = defaultdict(list), {"step": {}, "epoch": {}}
     with open(path) as f:
         for d in (json.loads(l) for l in f if l.strip()):
-            k = "epoch" if "epoch" in d else "step"
-            if "step" in d:
-                idx = d.pop("step")
-            else:
-                idx = d.pop("epoch")
-            if "epoch" in d:
-                d.pop("epoch")
+            is_epoch = any(k.startswith("valid_") for k in d) or ("epoch" in d and "batch_idx" not in d)
+            k = "epoch" if is_epoch else "step"
+
+            idx = d.pop("step", d.get("epoch", 0))
+
+            for key in ["epoch", "batch_idx", "optimizer_step"]:
+                d.pop(key, None)
+
             for metric, val in d.items():
                 raw[k, metric].append([idx, val])
 
