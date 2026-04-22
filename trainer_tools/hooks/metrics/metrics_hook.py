@@ -1,5 +1,6 @@
 from typing import Any
 import logging, json
+import dataclasses
 from collections import defaultdict
 from trainer_tools.utils import flatten_config
 from ...imports import *
@@ -154,6 +155,10 @@ class MetricsHook(MainProcessHook):
             return
 
         self.step_data["step"] = trainer.step_state.samples_seen
+        self.step_data["batch_idx"] = trainer.step_state.batch_idx
+        self.step_data["optimizer_step"] = trainer.step_state.optimizer_step
+        self.step_data["epoch"] = trainer.step_state.epoch
+
         if getattr(trainer, "_did_opt_step", False):
             # optimizer_step not yet incremented in step_state, so we add 1 for freq check
             if (trainer.step_state.optimizer_step + 1) % self.freq == 0:
@@ -170,10 +175,29 @@ class MetricsHook(MainProcessHook):
         val_stats = {k: v for k, v in epoch_means.items() if k.startswith("valid_")}
 
         if self.use_tracker and val_stats:
-            self.tracker.log(val_stats, trainer.step_state.samples_seen)
+            self.tracker.log(
+                {
+                    "batch_idx": trainer.step_state.batch_idx,
+                    "optimizer_step": trainer.step_state.optimizer_step,
+                    "epoch": trainer.step_state.epoch,
+                    **val_stats,
+                },
+                trainer.step_state.samples_seen,
+            )
         elif self.use_file and val_stats:
             with open(self.log_file, "a") as f:
-                f.write(json.dumps({"step": trainer.step_state.samples_seen, "epoch": trainer.step_state.epoch, **epoch_means}) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "step": trainer.step_state.samples_seen,
+                            "batch_idx": trainer.step_state.batch_idx,
+                            "optimizer_step": trainer.step_state.optimizer_step,
+                            "epoch": trainer.step_state.epoch,
+                            **epoch_means,
+                        }
+                    )
+                    + "\n"
+                )
 
         logs = [f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs}"]
 
