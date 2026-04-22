@@ -1,7 +1,7 @@
 import logging
 from .ema import EMAHook
 from ..imports import *
-from .base import MainProcessHook
+from .base import BaseHook
 from ..trainer import Trainer
 import os
 from omegaconf import OmegaConf
@@ -11,7 +11,7 @@ from .metrics import MetricsHook
 log = logging.getLogger(__name__)
 
 
-class CheckpointHook(MainProcessHook):
+class CheckpointHook(BaseHook):
     """
     Saves model, optimizer, scheduler, scaler, and RNG states.
     Can resume training from a checkpoint.
@@ -68,9 +68,10 @@ class CheckpointHook(MainProcessHook):
             return
         if not (config := getattr(trainer, "config", None)):
             return
-        config_path = self.save_dir / "config.yaml"
-        OmegaConf.save(config, config_path, resolve=True)
-        log.info(f"Saved config: {config_path}")
+        if trainer.is_main:
+            config_path = self.save_dir / "config.yaml"
+            OmegaConf.save(config, config_path, resolve=True)
+            log.info(f"Saved config: {config_path}")
         self.config_saved = True
 
     # ------------------------------------------------------------------
@@ -82,6 +83,9 @@ class CheckpointHook(MainProcessHook):
         # Skipped for interrupt saves where a barrier could deadlock.
         if trainer.is_distributed and sync:
             trainer.accelerator.wait_for_everyone()
+
+        if not trainer.is_main:
+            return
 
         path = self.save_dir / filename
         state = {
@@ -131,9 +135,7 @@ class CheckpointHook(MainProcessHook):
             return
         if Path(self.resume_path).exists():
             self.load_checkpoint(trainer, self.resume_path)
-            log.info(
-                f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.step_state.optimizer_step}"
-            )
+            log.info(f"Resumed training from checkpoint: {self.resume_path}, optimizer_step {trainer.step_state.optimizer_step}")
         else:
             log.info(f"Resume path {self.resume_path} does not exist. Starting fresh training.")
 
@@ -183,9 +185,7 @@ class CheckpointHook(MainProcessHook):
         self._unwrap_model(trainer).load_state_dict(checkpoint["model"])
         trainer.opt.load_state_dict(checkpoint["opt"])
         trainer.step_state.epoch = checkpoint.get("epoch", 0)
-        trainer.step_state.optimizer_step = checkpoint.get(
-            "optimizer_step", checkpoint.get("step", 0)
-        )  # Backward compat
+        trainer.step_state.optimizer_step = checkpoint.get("optimizer_step", checkpoint.get("step", 0))  # Backward compat
         trainer.step_state.samples_seen = checkpoint.get("samples_seen", 0)
 
         torch.set_rng_state(checkpoint["rng_torch"].cpu())
