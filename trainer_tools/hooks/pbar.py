@@ -23,7 +23,7 @@ class ProgressBarHook(MainProcessHook):
         self._init_pbar(
             trainer,
             desc=f"Epoch {trainer.step_state.epoch + 1}/{trainer.epochs} [Train]",
-            initial=trainer.step_state.batch_idx,
+            initial=0,
         )
 
     def before_valid(self, trainer):
@@ -32,21 +32,25 @@ class ProgressBarHook(MainProcessHook):
 
     def _init_pbar(self, trainer, desc, initial=0):
         total = len(trainer.dl)
-        if trainer.is_distributed:
-            total *= trainer.accelerator.num_processes
+        if trainer.training:
+            total = len(trainer.dl) // trainer.step_state.grad_accum_steps
+
         self.running_loss, self.count = 0.0, 0
         self.bar = tqdm(
-            trainer.dl,
-            initial=initial,
             total=total,
+            initial=initial,
             desc=desc,
             leave=False,
+            dynamic_ncols=True,
         )
 
     def after_step(self, trainer):
         self.running_loss += trainer.loss
         self.count += 1
-        self.bar.update(trainer.accelerator.num_processes if trainer.is_distributed else 1)
+        
+        if not trainer.training or trainer._did_opt_step:
+            self.bar.update(1)
+
         if (self.count - 1) % self.freq == 0:
             self.bar.set_postfix(loss=f"{self.running_loss / self.count:.4f}", refresh=False)
 

@@ -67,6 +67,7 @@ class AccelerateHook(BaseHook):
 
         trainer.accelerator = self.accelerator
         trainer.device = self.accelerator.device
+        trainer.step_state.grad_accum_steps = self.accelerator.gradient_accumulation_steps
 
         trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl = self.accelerator.prepare(
             trainer.model, trainer.opt, trainer.train_dl, trainer.valid_dl
@@ -81,6 +82,7 @@ class AccelerateHook(BaseHook):
                 self.accelerator.backward(trainer.loss_t)
 
         trainer.do_backward = accelerate_backward
+
 
         log.info(
             "AccelerateHook initialised — device: %s, mixed-precision: %s, grad-accum steps: %s, distributed: %s",
