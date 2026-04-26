@@ -151,7 +151,7 @@ class CheckpointHook(BaseHook):
 
         if self.save_strategy == "best":
             payload = [False]
-            if trainer.is_main and (m_hook := trainer.get_hook(MetricsHook)):
+            if trainer.is_main and (m_hook := trainer.get_hook(MetricsHook, None)):
                 stats = m_hook.step_data if self.metric in m_hook.step_data else m_hook.epoch_data
                 if stats.get(self.metric, float("inf")) < self._best_metric:
                     self._best_metric, payload[0] = stats[self.metric], True
