@@ -7,7 +7,7 @@ dependencies = ["torch>=2.2,<3", "numpy", "matplotlib", "tqdm", "omegaconf"]
 name = "trainer-tools"
 readme = "README.md"
 requires-python = ">= 3.11"
-version = "0.4.2"
+version = "0.4.3"
 license = { file = "LICENSE" }
 keywords = ["pytorch", "deep-learning", "training", "trainer"]
 classifiers = [

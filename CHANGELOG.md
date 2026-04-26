@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v0.4.3 (2026-04-26)
+
+### Bug Fixes
+
+- Few progress bar fixes during DP
+  ([`8d57ac8`](https://github.com/ssslakter/trainer-tools/commit/8d57ac84c8bf09a9b0a207855e995078bf286e73))
+
+- Fix load_metrics
+  ([`dd18090`](https://github.com/ssslakter/trainer-tools/commit/dd18090804a21ce17e8a87889df84fcfa0fc6bb5))
+
+- Improve logging
+  ([`c398733`](https://github.com/ssslakter/trainer-tools/commit/c3987331d42e67390ba193db6fe5641a56ed796e))
+
+- Removed deadlock in checkpoint
+  ([`7040039`](https://github.com/ssslakter/trainer-tools/commit/7040039d7aafb06d4e372e3e1b6fcf619e4127aa))
+
+### Patch
+
+- More keys in step data
+  ([`bd6ed81`](https://github.com/ssslakter/trainer-tools/commit/bd6ed81a2922e090234b43462953b459552cdabb))
+
+- Support development for old gpus
+  ([`e001d18`](https://github.com/ssslakter/trainer-tools/commit/e001d18c7a0986df1b9d54ec6c524667b485a04c))
+
+
 ## v0.4.2 (2026-04-20)
 
 ### Bug Fixes
