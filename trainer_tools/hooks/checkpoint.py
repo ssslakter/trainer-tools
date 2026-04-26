@@ -64,7 +64,7 @@ class CheckpointHook(BaseHook):
         return None
 
     def _save_config(self, trainer: Trainer):
-        if self.config_saved:
+        if self.config_saved or not trainer.is_main:
             return
         if not (config := getattr(trainer, "config", None)):
             return
@@ -150,16 +150,17 @@ class CheckpointHook(BaseHook):
         self._save(trainer, f"checkpoint_step_{trainer.step_state.optimizer_step}.pt", is_best=False)
 
         if self.save_strategy == "best":
-            metrics_hook = trainer.get_hook(MetricsHook, None)
-            if metrics_hook is None:
-                log.warning("No MetricsHook found, switching save_strategy to 'latest'.")
-                self.save_strategy = "latest"
-                return
+            payload = [False]
+            if trainer.is_main and (m_hook := trainer.get_hook(MetricsHook)):
+                stats = m_hook.step_data if self.metric in m_hook.step_data else m_hook.epoch_data
+                if stats.get(self.metric, float("inf")) < self._best_metric:
+                    self._best_metric, payload[0] = stats[self.metric], True
 
-            stats = metrics_hook.step_data if self.metric in metrics_hook.step_data else metrics_hook.epoch_data
-            current_metric = stats[self.metric]
-            if current_metric < self._best_metric:
-                self._best_metric = current_metric
+            if trainer.is_distributed:
+                from accelerate.utils import broadcast_object_list
+
+                broadcast_object_list(payload, from_process=0)
+            if payload[0]:
                 self._save(trainer, f"checkpoint_best_step_{trainer.step_state.optimizer_step}.pt", is_best=True)
 
     def after_cancel(self, trainer: Trainer):
@@ -167,6 +168,13 @@ class CheckpointHook(BaseHook):
 
     def after_fit(self, trainer: Trainer):
         self._save(trainer, "model_final.pt")
+
+        # wait until main process finishes saving the model
+        if trainer.is_distributed:
+            trainer.accelerator.wait_for_everyone()
+
+        if not trainer.is_main:
+            return
 
         model_to_save = self._unwrap_model(trainer)
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
