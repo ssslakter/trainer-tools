@@ -33,7 +33,6 @@ class CheckpointHook(BaseHook):
     ):
         self.save_dir, self.every, self.keep_last = Path(save_dir), save_every_steps, keep_last
         self.resume_path, self.save_strategy, self.metric = resume_path, save_strategy, metric_name
-        self.save_dir.mkdir(parents=True, exist_ok=True)
         self.saved_checkpoints: list[Path] = []
         self.config_saved = False
         self._best_metric = float("inf")
@@ -129,6 +128,8 @@ class CheckpointHook(BaseHook):
             oldest.unlink()
 
     def before_fit(self, trainer: Trainer):
+        if trainer.is_main:
+            self.save_dir.mkdir(parents=True, exist_ok=True)
         self._save_config(trainer)
 
         if not self.resume_path:

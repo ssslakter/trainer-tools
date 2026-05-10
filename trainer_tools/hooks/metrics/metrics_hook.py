@@ -80,6 +80,7 @@ class MetricsHook(MainProcessHook):
         self.verbose, self.tracker_kwargs = verbose, tracker_kwargs
         self.config = flatten_config(json.loads(config) if isinstance(config, str) else config or {})
         self.freq, self.log_file = freq, Path(log_file) if log_file else None
+        self.tracker_type, self.initialized = tracker_type, False
 
         self.metric_types = metrics
         self._phases: dict[str, list[Metric]] = defaultdict(list)
@@ -91,7 +92,6 @@ class MetricsHook(MainProcessHook):
         self.epoch_data = {}
         self.aggregators = defaultdict(float)
         self.counts = defaultdict(int)
-        self._init_tracker(tracker_type)
 
     def _init_tracker(self, t_type):
         self.tracker, self.use_tracker, self.use_file = None, False, False
@@ -131,6 +131,7 @@ class MetricsHook(MainProcessHook):
                     self.counts[k] += 1
 
     def before_fit(self, trainer):
+        self._init_tracker(self.tracker_type) # runs only for main worker
         if self.use_tracker:
             self.tracker.init(config=self.config, **self.tracker_kwargs)
 

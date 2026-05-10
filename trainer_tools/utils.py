@@ -48,7 +48,7 @@ def is_notebook():
         return False
 
 
-def flatten_config(cfg, parent_key="", sep="."):
+def flatten_config(cfg, parent_key="", sep=".") -> dict:
     items = []
     if isinstance(cfg, (DictConfig, ListConfig)):
         cfg = OmegaConf.to_container(cfg, resolve=True)
