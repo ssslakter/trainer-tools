@@ -13,8 +13,9 @@ log = logging.getLogger(__name__)
 
 class CheckpointHook(BaseHook):
     """
-    Saves model, optimizer, scheduler, scaler, and RNG states.
-    Can resume training from a checkpoint.
+    Saves model, optimizer, scheduler, scaler, RNG, and loop states.
+    Resumes ordinary loaders by replaying consumed batches. A single-process
+    loader with ``state_dict``/``load_state_dict`` resumes from its own cursor.
 
     Works transparently in both single-device and distributed (Accelerate)
     setups.
@@ -91,6 +92,8 @@ class CheckpointHook(BaseHook):
             "model": self._unwrap_model(trainer).state_dict(),
             "opt": trainer.opt.state_dict(),
             "epoch": trainer.step_state.epoch,
+            "batch_idx": trainer.step_state.batch_idx,
+            "phase": "train" if trainer.training else "valid",
             "optimizer_step": trainer.step_state.optimizer_step,
             "samples_seen": trainer.step_state.samples_seen,
             "rng_torch": torch.get_rng_state(),
@@ -107,6 +110,8 @@ class CheckpointHook(BaseHook):
             state["scheduler"] = sched_hook.sched.state_dict()
         if (ema_hook := trainer.get_hook(EMAHook, None)) and ema_hook.ema_model is not None:
             state["ema"] = ema_hook.ema_model.state_dict()
+        if not trainer.is_distributed and hasattr(trainer.dl, "state_dict"):
+            state["dataloader"] = trainer.dl.state_dict()
 
         torch.save(state, path)
         log.info(f"Saved checkpoint: {path}")
@@ -194,8 +199,21 @@ class CheckpointHook(BaseHook):
         self._unwrap_model(trainer).load_state_dict(checkpoint["model"])
         trainer.opt.load_state_dict(checkpoint["opt"])
         trainer.step_state.epoch = checkpoint.get("epoch", 0)
+        trainer.step_state.batch_idx = checkpoint.get("batch_idx", 0)
         trainer.step_state.optimizer_step = checkpoint.get("optimizer_step", checkpoint.get("step", 0))  # Backward compat
         trainer.step_state.samples_seen = checkpoint.get("samples_seen", 0)
+        phase = checkpoint.get("phase", "train")
+        trainer.start_epoch = trainer.step_state.epoch
+        trainer._resume = {
+            "epoch": trainer.start_epoch,
+            "batch_idx": trainer.step_state.batch_idx,
+            "phase": phase,
+            "has_dataloader_state": False,
+        }
+        dataloader = trainer.train_dl if phase == "train" else trainer.valid_dl
+        if "dataloader" in checkpoint and dataloader is not None and hasattr(dataloader, "load_state_dict"):
+            dataloader.load_state_dict(checkpoint["dataloader"])
+            trainer._resume["has_dataloader_state"] = True
 
         torch.set_rng_state(checkpoint["rng_torch"].cpu())
         if torch.cuda.is_available() and "rng_cuda" in checkpoint:

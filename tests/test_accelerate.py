@@ -78,7 +78,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
     train_dl, valid_dl = tuple_loaders
     save_dir = tmp_path / "ckpts"
 
-    # --- first run: train for 10 steps then interrupt -----------------------
+    # --- first run: interrupt after the first step of epoch 3 ----------------
     model_1 = simple_model
     opt_1 = torch.optim.Adam(model_1.parameters(), lr=1e-3)
 
@@ -114,7 +114,7 @@ def test_accelerate_checkpoint_save_and_resume(simple_model, tuple_loaders, tmp_
 
         def before_fit(self, trainer):
             assert trainer.step_state.epoch == 2
-            assert trainer.step_state.optimizer_step == 10
+            assert trainer.step_state.optimizer_step == 11
             unwrapped = trainer.accelerator.unwrap_model(trainer.model)
             for k, v in unwrapped.state_dict().items():
                 assert torch.equal(v, weights_before[k]), f"Mismatch in {k}"

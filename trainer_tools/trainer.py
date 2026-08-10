@@ -1,5 +1,6 @@
 from typing import Type, TypeVar, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from itertools import islice
 
 try:
     from accelerate import Accelerator
@@ -174,8 +175,17 @@ class Trainer:
 
     def _one_epoch(self):
         """Run single epoch"""
-        self.step_state.reset_epoch()
-        for _, self.batch in enumerate(self.dl):
+        phase = "train" if self.training else "valid"
+        resume = getattr(self, "_resume", None)
+        if resume and resume["epoch"] == self.step_state.epoch and resume["phase"] == phase:
+            self.step_state.batch_idx = resume["batch_idx"]
+            dl = self.dl if resume["has_dataloader_state"] else islice(self.dl, resume["batch_idx"], None)
+            self._resume = None
+        else:
+            self.step_state.reset_epoch()
+            dl = self.dl
+
+        for self.batch in dl:
             self._one_batch()
         self.batch = None
 
@@ -195,7 +205,8 @@ class Trainer:
                 self.model.train()
                 self.training, self.dl = True, self.train_dl
                 self._call_hook("before_epoch")
-                self._one_epoch()
+                if not (getattr(self, "_resume", None) and self._resume["phase"] == "valid"):
+                    self._one_epoch()
 
                 # Validation
                 if self.valid_dl is not None:
