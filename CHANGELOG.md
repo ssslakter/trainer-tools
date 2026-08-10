@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-08-10)
+
+### Bug Fixes
+
+- Align optimizer state and checkpoint timing
+  ([`4a46933`](https://github.com/ssslakter/trainer-tools/commit/4a469334d4f19f7241bf93105f7fe99583f309fe))
+
+- Checkpoint
+  ([`49fe57e`](https://github.com/ssslakter/trainer-tools/commit/49fe57e1bb6512d1ba7c1a113a3fc635f1d04c62))
+
+### Features
+
+- Resume checkpoints from data position
+  ([`a6798ea`](https://github.com/ssslakter/trainer-tools/commit/a6798ea33dfaa30b2f653899e2357d3e67b446c4))
+
+### Patch
+
+- Make dir only for main worker
+  ([`ac6ecec`](https://github.com/ssslakter/trainer-tools/commit/ac6ecec0d4a97b07d30f1049c14b28c2badb3684))
+
+
 ## v0.4.3 (2026-04-26)
 
 ### Bug Fixes
