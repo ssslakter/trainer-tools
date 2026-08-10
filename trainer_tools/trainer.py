@@ -148,12 +148,12 @@ class Trainer:
         else:
             self._did_opt_step = False
 
-        self._call_hook("after_step")
-
-        # Update state after the step
         if self.model.training:
             batch_size = self._get_batch_size(self.batch)
             self.step_state.increment_batch(batch_size, is_training=True, did_optimizer_step=self._did_opt_step)
+
+        # Post-step hooks observe the state produced by this batch.
+        self._call_hook("after_step")
 
         self.batch = None
         self.result = {}

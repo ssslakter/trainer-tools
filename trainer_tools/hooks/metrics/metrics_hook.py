@@ -160,8 +160,7 @@ class MetricsHook(MainProcessHook):
         self.step_data["epoch"] = trainer.step_state.epoch
 
         if getattr(trainer, "_did_opt_step", False):
-            # optimizer_step not yet incremented in step_state, so we add 1 for freq check
-            if (trainer.step_state.optimizer_step + 1) % self.freq == 0:
+            if trainer.step_state.optimizer_step % self.freq == 0:
                 if self.use_tracker:
                     current_step = self.step_data.pop("step", trainer.step_state.samples_seen)
                     self.tracker.log(self.step_data, current_step)

@@ -45,8 +45,9 @@ class BaseHook:
         pass
 
     def after_step(self, trainer):
-        """Called after opt.step() and opt.zero_grad() but before batch logic cleanup.
-        Guaranteed attributes: trainer._did_opt_step (True if optimizer stepped)
+        """Called after opt.step(), opt.zero_grad(), and step-state updates.
+        Guaranteed attributes: trainer._did_opt_step (True if optimizer stepped),
+        trainer.step_state (including this batch's counts).
         """
         pass
 

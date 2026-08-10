@@ -83,6 +83,14 @@ class AccelerateHook(BaseHook):
 
         trainer.do_backward = accelerate_backward
 
+        original_opt_step = trainer.do_opt_step
+
+        def accelerate_opt_step():
+            did_step = original_opt_step()
+            return bool(did_step) and self.accelerator.sync_gradients and not getattr(trainer.opt, "step_was_skipped", False)
+
+        trainer.do_opt_step = accelerate_opt_step
+
 
         log.info(
             "AccelerateHook initialised — device: %s, mixed-precision: %s, grad-accum steps: %s, distributed: %s",

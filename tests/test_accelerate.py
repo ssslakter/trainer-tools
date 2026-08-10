@@ -172,6 +172,7 @@ def test_accelerate_gradient_accumulation(simple_train_step):
 
     final_w = model.fc.weight.item()
     assert abs(final_w - 0.64) < 1e-5, f"Expected 0.64, got {final_w}"
+    assert trainer.step_state.optimizer_step == 2
 
 
 def test_accelerate_grad_accum_with_lr_scheduler(simple_train_step):
