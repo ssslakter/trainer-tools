@@ -1,0 +1,25 @@
+tests/test_accelerate.py
+  s_53bdf4bc40f6f3::t_9f2cc4352a4cd8 81,117
+tests/test_checkpoint.py
+  s_53bdf4bc40f6f3::t_512e6ff1a5106c 1-2,35-105,145
+trainer_tools/hooks/checkpoint.py
+  s_53bdf4bc40f6f3::t_e7047577fe9dc2 16-18,95-96,113-114,202,205-216
+trainer_tools/trainer.py
+  s_53bdf4bc40f6f3::t_d9146dde2c5d7d 2-3,178-188,208-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "a6798ea33dfaa30b2f653899e2357d3e67b446c4",
+  "prompts": {},
+  "sessions": {
+    "s_53bdf4bc40f6f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fed91-535d-73c0-815a-c37db70b34e8",
+        "model": "unknown"
+      },
+      "human_author": "Slava Chaunin <67190162+Ssslakter@users.noreply.github.com>"
+    }
+  }
+}
